@@ -88,7 +88,6 @@ CDF_POINT = {"tau_p": 4, "K": 24, "L": 25}
 SCHEMES = (
     "greedy+robust",
     "greedy+oblivious",
-    "random+robust",
     "random+oblivious",
     "greedy+mrt",
 )

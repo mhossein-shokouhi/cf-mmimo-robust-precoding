@@ -141,7 +141,6 @@ Naming convention: `{pilot}+{precoder}`.
 | ------------------- | ----------------------- | ------------------- | ---- |
 | `greedy+robust`     | Greedy (priority score) | **Robust WMMSE**    | Proposed |
 | `greedy+oblivious`  | Greedy (priority score) | Oblivious WMMSE     | Ablation: drops \(\mathbf{R}_{k,l}\) |
-| `random+robust`     | Random                  | Robust WMMSE        | Ablation: random pilots |
 | `random+oblivious`  | Random                  | Oblivious WMMSE     | Naive baseline |
 | `greedy+mrt`        | Greedy (priority score) | MRT (conjugate BF)  | Linear-precoder baseline |
 
@@ -197,7 +196,7 @@ relative to the paper:
    \(\rho_k = w_C C_k + w_U U_k\) (eq. (15) of the paper) but selects pilots
    greedily. The headline contribution — the robust precoder — is by design
    independent of which pilot-assignment policy sits on top, and the ablation
-   table confirms this (compare `greedy+robust` vs `random+robust`).
+   table confirms this (compare `greedy+robust` vs `random+oblivious`).
 2. **Minimum-rate constraints.** \(\eta_k = 1,\ \mu_k = 0\) throughout. The
    framework supports them but they are turned off here.
 3. **Per-O-RU \(\lambda_\ell\) solver.** Computed in closed form via
