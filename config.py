@@ -18,8 +18,8 @@ def dbm_to_watt(x_dbm: float) -> float:
 
 @dataclass
 class SimConfig:
-    K: int = 16
-    L: int = 36
+    K: int = 24
+    L: int = 25
     N_t: int = 4
     L_max: int = 8
 
@@ -35,7 +35,7 @@ class SimConfig:
     sigma2_dbm: float = -114.0
 
     tau_c: int = 200
-    tau_p: int = 8
+    tau_p: int = 4
 
     wmmse_outer_iters: int = 25
     wmmse_tol: float = 1e-4
@@ -79,8 +79,8 @@ class SimConfig:
 
 DEFAULT_CONFIG = SimConfig()
 
-TAU_P_SWEEP: Tuple[int, ...] = (4, 8, 16)
-K_SWEEP: Tuple[int, ...] = (8, 12, 16, 20, 24)
+TAU_P_SWEEP: Tuple[int, ...] = (4, 8, 12, 16, 20, 24)
+K_SWEEP: Tuple[int, ...] = (8, 12, 16, 20, 24, 28)
 L_SWEEP: Tuple[int, ...] = (16, 25, 36, 49, 64)
 
 CDF_POINT = {"tau_p": 4, "K": 24, "L": 25}

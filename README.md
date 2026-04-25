@@ -157,15 +157,15 @@ dict at the bottom of `precoding.py`.
 
 | Parameter | Default |
 | --------- | ------- |
-| Number of users \(K\)                | 16 |
-| Number of O-RUs \(L\)                | 36 |
+| Number of users \(K\)                | 24 |
+| Number of O-RUs \(L\)                | 25 |
 | Antennas per O-RU \(N_\mathrm{t}\)   | 4 |
 | Cluster size \(L_\mathrm{max}\)      | 8 |
 | Coverage area                        | 500 m × 500 m |
 | Carrier frequency \(f_c\)            | 2 GHz |
 | Path-loss model                      | 3GPP TR 36.814 UMi-NLOS |
 | Coherence block \(\tau_\mathrm{c}\)  | 200 symbols |
-| Pilot length \(\tau_\mathrm{p}\)     | 4 / 8 / 16 |
+| Pilot length \(\tau_\mathrm{p}\)     | 4 |
 | Per-O-RU DL power \(P_\mathrm{DL}^\max\) | 30 dBm |
 | User UL pilot power                  | 20 dBm |
 | Noise variance                       | −114 dBm |
@@ -175,8 +175,8 @@ dict at the bottom of `precoding.py`.
 Sweep ranges are also defined there:
 
 ```python
-TAU_P_SWEEP = (4, 8, 16)
-K_SWEEP     = (8, 12, 16, 20, 24)
+TAU_P_SWEEP = (4, 8, 12, 16, 20, 24)
+K_SWEEP     = (8, 12, 16, 20, 24, 28)
 L_SWEEP     = (16, 25, 36, 49, 64)
 CDF_POINT   = {"tau_p": 4, "K": 24, "L": 25}
 ```
