@@ -89,6 +89,7 @@ SCHEMES = (
     "greedy+robust",
     "greedy+oblivious",
     "random+oblivious",
+    "greedy+rzf",
     "greedy+mrt",
 )
 

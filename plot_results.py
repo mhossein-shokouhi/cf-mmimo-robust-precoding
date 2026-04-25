@@ -15,6 +15,7 @@ SCHEME_PLOT_STYLES = {
     "greedy+oblivious": {"label": "Greedy pilot + oblivious WMMSE",  "marker": "s", "linestyle": "--", "linewidth": 1.6, "color": "#ff7f0e"},
     "random+robust":    {"label": "Random pilot + robust WMMSE",     "marker": "^", "linestyle": "-.", "linewidth": 1.6, "color": "#2ca02c"},
     "random+oblivious": {"label": "Random pilot + oblivious WMMSE",  "marker": "D", "linestyle": ":",  "linewidth": 1.6, "color": "#d62728"},
+    "greedy+rzf":       {"label": "Greedy pilot + RZF",              "marker": ">", "linestyle": "-.", "linewidth": 1.6, "color": "#8c564b"},
     "greedy+mrt":       {"label": "Greedy pilot + MRT",              "marker": "v", "linestyle": "-",  "linewidth": 1.4, "color": "#9467bd"},
 }
 
@@ -110,6 +111,7 @@ def _plot_ablation(path: str,
 CDF_MAIN_SCHEMES = ("greedy+robust",
                     "greedy+oblivious",
                     "random+oblivious",
+                    "greedy+rzf",
                     "greedy+mrt")
 
 

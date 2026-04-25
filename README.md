@@ -40,9 +40,11 @@ demand correspondingly less interference suppression effort than users with
 noisy estimates — which provably outperforms the oblivious WMMSE design in
 pilot-contaminated regimes. In our simulations, swapping the oblivious WMMSE
 precoder for the proposed robust WMMSE — while keeping every other knob fixed
-— yields a **paired aggregate-throughput gain of +12.81% (95% CI ±3.46%)** at
-the loaded operating point \(\tau_\mathrm{p}=4,\ K=24,\ L=25\), and up to
-**+20% at the median per-user spectral efficiency** in the CDF.
+— yields a **paired aggregate-throughput gain of +11.77% (95% CI ±1.14%,
+\(t_9 = 20.2,\ p < 10^{-3}\))** at the loaded operating point
+\(\tau_\mathrm{p}=4,\ K=24,\ L=25\), and **+9.7% at the median per-user
+spectral efficiency** in the CDF. Both linear baselines (LP-RZF and MRT)
+fall well below either WMMSE flavor.
 
 The paper also contains a multi-agent DRL pilot-assignment component, but the
 headline gain comes from the robust precoder — and this repository focuses on
@@ -57,7 +59,7 @@ making that contribution easy to inspect, run, and reproduce.
 | `config.py`            | Single dataclass holding every physical-layer / simulation parameter, plus the predefined sweeps. |
 | `channel.py`           | 3GPP TR 36.814 UMi-NLOS path loss, user-centric clustering, complex-Gaussian small-scale fading, LMMSE estimator, pilot-conflict matrix. |
 | `pilot_assignment.py`  | Greedy priority-score heuristic and the random-assignment baseline. |
-| `precoding.py`         | **Robust WMMSE (proposed)**, oblivious WMMSE (ablation), MRT (linear baseline), closed-form \(\lambda_\ell\) solver. |
+| `precoding.py`         | **Robust WMMSE (proposed)**, oblivious WMMSE (ablation), Local Partial RZF, MRT (linear baselines), closed-form \(\lambda_\ell\) solver. |
 | `metrics.py`           | Per-user rate / aggregate throughput evaluated against the **true** channel realisations. |
 | `simulator.py`         | Glue code: turns a `(scheme, seed)` pair into a Monte-Carlo estimate (and per-user rate samples for the CDF). |
 | `run_simulations.py`   | Top-level driver: \(\tau_\mathrm{p}\) sweep, \(K\) sweep, \(L\) sweep, CDF point. |
@@ -142,6 +144,7 @@ Naming convention: `{pilot}+{precoder}`.
 | `greedy+robust`     | Greedy (priority score) | **Robust WMMSE**    | Proposed |
 | `greedy+oblivious`  | Greedy (priority score) | Oblivious WMMSE     | Ablation: drops \(\mathbf{R}_{k,l}\) |
 | `random+oblivious`  | Random                  | Oblivious WMMSE     | Naive baseline |
+| `greedy+rzf`        | Greedy (priority score) | Local Partial RZF   | Linear-precoder baseline (LP-RZF, Bjornson et al.) |
 | `greedy+mrt`        | Greedy (priority score) | MRT (conjugate BF)  | Linear-precoder baseline |
 
 Adding a new precoder is a one-liner: implement a function with signature

@@ -1,6 +1,6 @@
 """Precoding algorithms.
 
-We implement three schemes:
+We implement four schemes:
 
 1. `robust_wmmse`: the proposed robust WMMSE algorithm derived in
    Section III.A of `ORAN.tex`.  It keeps the channel-estimation error
@@ -11,11 +11,16 @@ We implement three schemes:
    dropped. Mathematically equivalent to feeding `err_var = 0` to the
    robust solver, but treated as a separate entry point for clarity.
 
-3. `mrt`: conjugate beamforming with equal power per user at each O-RU.
+3. `rzf`: Local Partial Regularized Zero-Forcing (LP-RZF), the standard
+   cell-free baseline of Bjornson, Demir, and Sanguinetti. Each O-RU
+   inverts its local Gram matrix with regularization `K_l sigma^2 / P_max`
+   and allocates equal power per served user.
 
-Per-O-RU power is enforced through the Lagrange multiplier `lambda_l`
-obtained via an eigendecomposition + bisection search, following the TWC
-companion paper (eqs. 26-28 there).
+4. `mrt`: conjugate beamforming with equal power per user at each O-RU.
+
+Per-O-RU power for the WMMSE schemes is enforced through the Lagrange
+multiplier `lambda_l` obtained via an eigendecomposition + bisection
+search, following the TWC companion paper (eqs. 26-28 there).
 """
 
 from __future__ import annotations
@@ -161,7 +166,9 @@ def _wmmse_outer(h_hat: np.ndarray,
 
                 eu = (eta[users] * w[users] * u[users])
                 term1 = h_hat[users, ell, :].T * eu
-                term2 = H_l.T @ (alpha[:, None] * z_mat.conj())
+                # B_l[:, j] = sum_i alpha_i hat_h_{i,l} z_{i,k_j} (no conjugate
+                # on z; verified by Wirtinger gradient of the WMMSE cost).
+                term2 = H_l.T @ (alpha[:, None] * z_mat)
                 B_l = term1 - term2
 
                 V_new, _ = _solve_v_oru(A_l, B_l, P_max, cfg)
@@ -202,8 +209,55 @@ def mrt(h_hat: np.ndarray,
     return _initial_precoder(h_hat, users_of_oru, cfg.P_max)
 
 
+def rzf(h_hat: np.ndarray,
+        err_var: np.ndarray,  # noqa: ARG001
+        users_of_oru: List[List[int]],
+        cfg: SimConfig,
+        eta: Optional[np.ndarray] = None) -> np.ndarray:
+    """Local Partial Regularized Zero-Forcing (LP-RZF) per O-RU.
+
+    For O-RU `l` with serving set `K_l` of size `K_l`:
+
+        H_l        = [hat_h_{k,l}]_{k in K_l}    in C^{N_t x K_l}
+        D_l        = H_l H_l^H + (K_l sigma^2 / P_max) I_{N_t}
+        v_hat_{k,l} = D_l^{-1} hat_h_{k,l}
+        v_{k,l}    = sqrt(P_max / K_l) * v_hat_{k,l} / ||v_hat_{k,l}||
+
+    The regularization `alpha_l = K_l sigma^2 / P_max` is the canonical
+    cell-free LP-RZF choice (Bjornson, Demir, Sanguinetti 2021), obtained
+    from the local MMSE solution under equal per-user data power
+    `p_k = P_max / K_l`. The output is per-user power-normalized so that
+    `sum_{k in K_l} ||v_{k,l}||^2 = P_max`, matching MRT's normalization.
+    """
+    del eta
+    K, L, N_t = h_hat.shape
+    P_max = cfg.P_max
+    sigma2 = cfg.sigma2
+    v = np.zeros_like(h_hat)
+    for ell in range(L):
+        users = users_of_oru[ell]
+        if not users:
+            continue
+        K_l = len(users)
+        H_l = h_hat[users, ell, :].T  # (N_t, K_l)
+        alpha_l = K_l * sigma2 / P_max
+        D = H_l @ H_l.conj().T + alpha_l * np.eye(N_t)
+        try:
+            W = np.linalg.solve(D, H_l)
+        except np.linalg.LinAlgError:
+            W = np.linalg.lstsq(D, H_l, rcond=None)[0]
+        p_per_user = P_max / K_l
+        for j, k in enumerate(users):
+            w = W[:, j]
+            n = np.linalg.norm(w)
+            if n > 1e-14:
+                v[k, ell, :] = np.sqrt(p_per_user) * w / n
+    return v
+
+
 PRECODERS = {
     "robust": robust_wmmse,
     "oblivious": oblivious_wmmse,
+    "rzf": rzf,
     "mrt": mrt,
 }
