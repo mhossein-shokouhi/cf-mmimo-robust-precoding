@@ -19,37 +19,52 @@ SCHEME_PLOT_STYLES = {
 }
 
 
-def _mean_std(thr: np.ndarray, axis: int = -1):
-    return thr.mean(axis=axis), thr.std(axis=axis, ddof=1) if thr.shape[axis] > 1 else np.zeros(thr.shape[:axis])
+_SWEEP_TITLES = {
+    "tau_ps": (r"Aggregate throughput vs. $\tau_\mathrm{{p}}$ "
+               r"($K={K}$, $L={L}$)"),
+    "Ks":     (r"Aggregate throughput vs. $K$ "
+               r"($\tau_\mathrm{{p}}={tau_p}$, $L={L}$)"),
+    "Ls":     (r"Aggregate throughput vs. $L$ "
+               r"($\tau_\mathrm{{p}}={tau_p}$, $K={K}$)"),
+}
+
+_ABLATION_TITLES = {
+    "tau_ps": r"Ablation study ($K={K}$, $L={L}$)",
+    "Ks":     r"Ablation study ($\tau_\mathrm{{p}}={tau_p}$, $L={L}$)",
+    "Ls":     r"Ablation study ($\tau_\mathrm{{p}}={tau_p}$, $K={K}$)",
+}
+
+
+def _format_title(template: str, data) -> str:
+    """Substitute the fixed-parameter placeholders from the npz metadata."""
+    fields = {}
+    for key in ("K", "L", "tau_p", "N_t"):
+        if key in data.files:
+            fields[key] = int(data[key])
+    return template.format(**fields)
 
 
 def _plot_sweep(path: str,
                 x_key: str,
                 x_label: str,
-                title_suffix: str,
                 figure_path: str) -> None:
     data = np.load(path, allow_pickle=True)
     schemes = [str(s) for s in data["schemes"]]
     x = data[x_key]
-    thr = data["throughput"]
-    mean = thr.mean(axis=-1)
-    if thr.shape[-1] > 1:
-        std = thr.std(axis=-1, ddof=1)
-    else:
-        std = np.zeros_like(mean)
+    mean = data["throughput"].mean(axis=-1)
 
     plt.figure(figsize=(6.5, 4.2))
     for i, sch in enumerate(schemes):
         style = SCHEME_PLOT_STYLES.get(sch, {"label": sch, "marker": "o", "linestyle": "-", "color": None})
-        plt.errorbar(x, mean[i], yerr=std[i], capsize=3,
-                     label=style["label"],
-                     marker=style["marker"],
-                     linestyle=style["linestyle"],
-                     linewidth=style.get("linewidth", 1.5),
-                     color=style.get("color"))
+        plt.plot(x, mean[i],
+                 label=style["label"],
+                 marker=style["marker"],
+                 linestyle=style["linestyle"],
+                 linewidth=style.get("linewidth", 1.5),
+                 color=style.get("color"))
     plt.xlabel(x_label)
     plt.ylabel("Aggregate throughput (bits/s/Hz)")
-    plt.title(title_suffix)
+    plt.title(_format_title(_SWEEP_TITLES[x_key], data))
     plt.grid(True, alpha=0.3)
     plt.legend(loc="best", fontsize=9)
     plt.tight_layout()
@@ -66,12 +81,7 @@ def _plot_ablation(path: str,
     data = np.load(path, allow_pickle=True)
     schemes = [str(s) for s in data["schemes"]]
     x = data[x_key]
-    thr = data["throughput"]
-    mean = thr.mean(axis=-1)
-    if thr.shape[-1] > 1:
-        std = thr.std(axis=-1, ddof=1)
-    else:
-        std = np.zeros_like(mean)
+    mean = data["throughput"].mean(axis=-1)
 
     ablation_order = ["greedy+robust", "greedy+oblivious", "random+robust", "random+oblivious"]
     plt.figure(figsize=(6.5, 4.2))
@@ -80,15 +90,15 @@ def _plot_ablation(path: str,
             continue
         i = schemes.index(sch)
         style = SCHEME_PLOT_STYLES[sch]
-        plt.errorbar(x, mean[i], yerr=std[i], capsize=3,
-                     label=style["label"],
-                     marker=style["marker"],
-                     linestyle=style["linestyle"],
-                     linewidth=style.get("linewidth", 1.5),
-                     color=style.get("color"))
+        plt.plot(x, mean[i],
+                 label=style["label"],
+                 marker=style["marker"],
+                 linestyle=style["linestyle"],
+                 linewidth=style.get("linewidth", 1.5),
+                 color=style.get("color"))
     plt.xlabel(x_label)
     plt.ylabel("Aggregate throughput (bits/s/Hz)")
-    plt.title("Ablation: pilot assignment vs. robust precoding")
+    plt.title(_format_title(_ABLATION_TITLES[x_key], data))
     plt.grid(True, alpha=0.3)
     plt.legend(loc="best", fontsize=9)
     plt.tight_layout()
@@ -160,7 +170,6 @@ def main() -> None:
 
     if os.path.exists(tau_path):
         _plot_sweep(tau_path, "tau_ps", r"Number of pilots $\tau_\mathrm{p}$",
-                    "Aggregate throughput vs. pilot-codebook size",
                     os.path.join(args.out, "fig_tau_p_sweep.pdf"))
         _plot_ablation(tau_path, "tau_ps", r"Number of pilots $\tau_\mathrm{p}$",
                        os.path.join(args.out, "fig_tau_p_ablation.pdf"))
@@ -169,14 +178,12 @@ def main() -> None:
 
     if os.path.exists(K_path):
         _plot_sweep(K_path, "Ks", r"Number of users $K$",
-                    "Aggregate throughput vs. number of users",
                     os.path.join(args.out, "fig_K_sweep.pdf"))
     else:
         print(f"missing {K_path}")
 
     if os.path.exists(L_path):
         _plot_sweep(L_path, "Ls", r"Number of O-RUs $L$",
-                    "Aggregate throughput vs. number of O-RUs",
                     os.path.join(args.out, "fig_L_sweep.pdf"))
     else:
         print(f"missing {L_path}")
