@@ -38,15 +38,15 @@ end
 function s = local_label_for_scheme(scheme)
     switch string(scheme)
         case "greedy+robust"
-            s = "Proposed (greedy + robust)";
+            s = "Proposed Algorithm";
         case "greedy+oblivious"
-            s = "Greedy pilot + oblivious WMMSE";
+            s = "CF-WMMSE, Proposed PA";
         case "random+oblivious"
-            s = "Random pilot + oblivious WMMSE";
+            s = "CF-WMMSE, Random PA";
         case "greedy+rzf"
-            s = "Greedy pilot + RZF";
+            s = "RZF, Proposed PA";
         case "greedy+mrt"
-            s = "Greedy pilot + MRT";
+            s = "MRT, Proposed PA";
         otherwise
             s = scheme;
     end

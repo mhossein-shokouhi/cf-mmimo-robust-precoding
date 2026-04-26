@@ -1,22 +1,26 @@
 """Precoding algorithms.
 
-We implement four schemes:
+We implement four schemes (display names used in figures and the paper are
+shown in **bold**; the Python function names are kept for clarity):
 
-1. `robust_wmmse`: the proposed robust WMMSE algorithm derived in
-   Section III.A of `ORAN.tex`.  It keeps the channel-estimation error
-   covariance terms (`R_{k,l} = err_var_{k,l} I`) inside the update
-   equations of `u_k`, `w_k`, and `v_{k,l}` (eqs. after (11) and (13)).
+1. `robust_wmmse` (**Robust WMMSE**, used inside the *Proposed Algorithm*):
+   the proposed robust WMMSE algorithm derived in Section III.A of
+   `ORAN.tex`. It keeps the channel-estimation error covariance terms
+   (`R_{k,l} = err_var_{k,l} I`) inside the update equations of `u_k`,
+   `w_k`, and `v_{k,l}` (eqs. after (11) and (13)).
 
-2. `oblivious_wmmse`: an ablation / baseline where the `R_{k,l}` terms are
-   dropped. Mathematically equivalent to feeding `err_var = 0` to the
-   robust solver, but treated as a separate entry point for clarity.
+2. `oblivious_wmmse` (**CF-WMMSE**): the conventional cell-free WMMSE
+   baseline where the `R_{k,l}` terms are dropped. Mathematically equivalent
+   to feeding `err_var = 0` to the robust solver, but treated as a separate
+   entry point for clarity.
 
-3. `rzf`: Local Partial Regularized Zero-Forcing (LP-RZF), the standard
-   cell-free baseline of Bjornson, Demir, and Sanguinetti. Each O-RU
-   inverts its local Gram matrix with regularization `K_l sigma^2 / P_max`
-   and allocates equal power per served user.
+3. `rzf` (**RZF**): Local Partial Regularized Zero-Forcing (LP-RZF), the
+   standard cell-free baseline of Bjornson, Demir, and Sanguinetti. Each
+   O-RU inverts its local Gram matrix with regularization
+   `K_l sigma^2 / P_max` and allocates equal power per served user.
 
-4. `mrt`: conjugate beamforming with equal power per user at each O-RU.
+4. `mrt` (**MRT**): conjugate beamforming with equal power per user at each
+   O-RU.
 
 Per-O-RU power for the WMMSE schemes is enforced through the Lagrange
 multiplier `lambda_l` obtained via an eigendecomposition + bisection
@@ -194,7 +198,7 @@ def oblivious_wmmse(h_hat: np.ndarray,
                     users_of_oru: List[List[int]],
                     cfg: SimConfig,
                     eta: Optional[np.ndarray] = None) -> np.ndarray:
-    """Oblivious WMMSE baseline (treats estimates as perfect)."""
+    """CF-WMMSE baseline (treats LMMSE estimates as perfect, i.e., R_{k,l}=0)."""
     zero_err = np.zeros_like(err_var)
     return _wmmse_outer(h_hat, zero_err, users_of_oru, cfg, eta=eta)
 

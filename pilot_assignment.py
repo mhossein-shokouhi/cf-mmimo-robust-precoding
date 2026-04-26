@@ -1,8 +1,10 @@
-"""Pilot assignment algorithms.
+"""Pilot assignment (PA) algorithms.
 
 The paper uses a multi-agent DRL algorithm guided by the priority score in
 eq. (15). Per the Checklist we replace that with a heuristic: we follow the
-same priority-score structure but select the new pilot index greedily.
+same priority-score structure but select the new pilot index greedily. This
+heuristic is referred to as the **Proposed PA** in all figures and tables.
+The random-PA baseline is included for comparison.
 """
 
 from __future__ import annotations

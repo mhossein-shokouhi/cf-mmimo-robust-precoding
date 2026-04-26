@@ -16,8 +16,8 @@ through an O-RAN architecture. \(K\) single-antenna users are jointly served by
 \(L\) geographically distributed open radio units (O-RUs) over a small pilot
 codebook of length \(\tau_\mathrm{p}\). When \(K > \tau_\mathrm{p}\), users have
 to share pilots and **pilot contamination** leaves every channel estimate
-imperfect. Conventional WMMSE-type precoders simply ignore this fact and treat
-the LMMSE estimate \(\hat{\mathbf{h}}_{k,l}\) as ground truth.
+imperfect. Conventional cell-free WMMSE precoders (CF-WMMSE) simply ignore this
+fact and treat the LMMSE estimate \(\hat{\mathbf{h}}_{k,l}\) as ground truth.
 
 ### Core contribution: robust precoding (Section III-A)
 
@@ -37,10 +37,10 @@ through every step of the WMMSE block-coordinate-descent (BCD) update:
 
 The net effect is that, in the WMMSE iterations, users with reliable CSI
 demand correspondingly less interference suppression effort than users with
-noisy estimates — which provably outperforms the oblivious WMMSE design in
-pilot-contaminated regimes. In our simulations, swapping the oblivious WMMSE
-precoder for the proposed robust WMMSE — while keeping every other knob fixed
-— yields a **paired aggregate-throughput gain of +11.77% (95% CI ±1.14%,
+noisy estimates — which provably outperforms the CF-WMMSE design in
+pilot-contaminated regimes. In our simulations, swapping CF-WMMSE for the
+proposed robust WMMSE — while keeping every other knob fixed — yields a
+**paired aggregate-throughput gain of +11.77% (95% CI ±1.14%,
 \(t_9 = 20.2,\ p < 10^{-3}\))** at the loaded operating point
 \(\tau_\mathrm{p}=4,\ K=24,\ L=25\), and **+9.7% at the median per-user
 spectral efficiency** in the CDF. Both linear baselines (LP-RZF and MRT)
@@ -58,8 +58,8 @@ making that contribution easy to inspect, run, and reproduce.
 | ---- | ------- |
 | `config.py`            | Single dataclass holding every physical-layer / simulation parameter, plus the predefined sweeps. |
 | `channel.py`           | 3GPP TR 36.814 UMi-NLOS path loss, user-centric clustering, complex-Gaussian small-scale fading, LMMSE estimator, pilot-conflict matrix. |
-| `pilot_assignment.py`  | Greedy priority-score heuristic and the random-assignment baseline. |
-| `precoding.py`         | **Robust WMMSE (proposed)**, oblivious WMMSE (ablation), Local Partial RZF, MRT (linear baselines), closed-form \(\lambda_\ell\) solver. |
+| `pilot_assignment.py`  | Greedy priority-score heuristic (the **Proposed PA**) and the random-assignment baseline. |
+| `precoding.py`         | **Robust WMMSE (proposed)**, CF-WMMSE (ablation), Local Partial RZF, MRT (linear baselines), closed-form \(\lambda_\ell\) solver. |
 | `metrics.py`           | Per-user rate / aggregate throughput evaluated against the **true** channel realisations. |
 | `simulator.py`         | Glue code: turns a `(scheme, seed)` pair into a Monte-Carlo estimate (and per-user rate samples for the CDF). |
 | `run_simulations.py`   | Top-level driver: \(\tau_\mathrm{p}\) sweep, \(K\) sweep, \(L\) sweep, CDF point. |
@@ -137,15 +137,20 @@ The same logic is exposed via `--no-tau`, `--no-K`, `--no-L`, `--no-cdf`.
 
 ## Schemes implemented
 
-Naming convention: `{pilot}+{precoder}`.
+Display name convention: `{Precoder}, {PA}` — the precoder name comes first,
+followed by the pilot-assignment (PA) policy. The combination of robust WMMSE
+and the greedy priority-score PA is referred to as the **Proposed Algorithm**.
 
-| Name                | Pilot assignment        | Precoder            | Role |
-| ------------------- | ----------------------- | ------------------- | ---- |
-| `greedy+robust`     | Greedy (priority score) | **Robust WMMSE**    | Proposed |
-| `greedy+oblivious`  | Greedy (priority score) | Oblivious WMMSE     | Ablation: drops \(\mathbf{R}_{k,l}\) |
-| `random+oblivious`  | Random                  | Oblivious WMMSE     | Naive baseline |
-| `greedy+rzf`        | Greedy (priority score) | Local Partial RZF   | Linear-precoder baseline (LP-RZF, Bjornson et al.) |
-| `greedy+mrt`        | Greedy (priority score) | MRT (conjugate BF)  | Linear-precoder baseline |
+| Display name                  | Pilot assignment        | Precoder            | Internal key (in `.npz`) |
+| ----------------------------- | ----------------------- | ------------------- | ------------------------ |
+| **Proposed Algorithm**        | Greedy (priority score) | **Robust WMMSE**    | `greedy+robust`          |
+| CF-WMMSE, Proposed PA         | Greedy (priority score) | CF-WMMSE            | `greedy+oblivious`       |
+| CF-WMMSE, Random PA           | Random                  | CF-WMMSE            | `random+oblivious`       |
+| RZF, Proposed PA              | Greedy (priority score) | Local Partial RZF   | `greedy+rzf`             |
+| MRT, Proposed PA              | Greedy (priority score) | MRT (conjugate BF)  | `greedy+mrt`             |
+
+The internal keys (`{pilot}+{precoder}`) are kept stable so cached
+`results/*.npz` files remain readable across renames.
 
 Adding a new precoder is a one-liner: implement a function with signature
 `f(h_hat, err_var, users_of_oru, cfg) -> v` and register it in the `PRECODERS`
@@ -194,12 +199,12 @@ Per the project checklist (`Checklist.txt`), three simplifications are applied
 relative to the paper:
 
 1. **Pilot assignment.** The multi-agent DRL algorithm of Section III-B is
-   replaced with a greedy priority-score heuristic (`pilot_assignment.py`).
-   The heuristic uses the same score
+   replaced with a greedy priority-score heuristic (`pilot_assignment.py`),
+   referred to as the **Proposed PA** in all figures. It uses the same score
    \(\rho_k = w_C C_k + w_U U_k\) (eq. (15) of the paper) but selects pilots
    greedily. The headline contribution — the robust precoder — is by design
    independent of which pilot-assignment policy sits on top, and the ablation
-   table confirms this (compare `greedy+robust` vs `random+oblivious`).
+   table confirms this (compare *Proposed Algorithm* vs *CF-WMMSE, Random PA*).
 2. **Minimum-rate constraints.** \(\eta_k = 1,\ \mu_k = 0\) throughout. The
    framework supports them but they are turned off here.
 3. **Per-O-RU \(\lambda_\ell\) solver.** Computed in closed form via

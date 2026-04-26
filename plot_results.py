@@ -11,12 +11,12 @@ import numpy as np
 from config import DEFAULT_CONFIG
 
 SCHEME_PLOT_STYLES = {
-    "greedy+robust":    {"label": "Proposed (greedy + robust)",      "marker": "o", "linestyle": "-",  "linewidth": 2.0, "color": "#1f77b4"},
-    "greedy+oblivious": {"label": "Greedy pilot + oblivious WMMSE",  "marker": "s", "linestyle": "--", "linewidth": 1.6, "color": "#ff7f0e"},
-    "random+robust":    {"label": "Random pilot + robust WMMSE",     "marker": "^", "linestyle": "-.", "linewidth": 1.6, "color": "#2ca02c"},
-    "random+oblivious": {"label": "Random pilot + oblivious WMMSE",  "marker": "D", "linestyle": ":",  "linewidth": 1.6, "color": "#d62728"},
-    "greedy+rzf":       {"label": "Greedy pilot + RZF",              "marker": ">", "linestyle": "-.", "linewidth": 1.6, "color": "#8c564b"},
-    "greedy+mrt":       {"label": "Greedy pilot + MRT",              "marker": "v", "linestyle": "-",  "linewidth": 1.4, "color": "#9467bd"},
+    "greedy+robust":    {"label": "Proposed Algorithm",      "marker": "o", "linestyle": "-",  "linewidth": 2.0, "color": "#1f77b4"},
+    "greedy+oblivious": {"label": "CF-WMMSE, Proposed PA",   "marker": "s", "linestyle": "--", "linewidth": 1.6, "color": "#ff7f0e"},
+    "random+robust":    {"label": "Robust WMMSE, Random PA", "marker": "^", "linestyle": "-.", "linewidth": 1.6, "color": "#2ca02c"},
+    "random+oblivious": {"label": "CF-WMMSE, Random PA",     "marker": "D", "linestyle": ":",  "linewidth": 1.6, "color": "#d62728"},
+    "greedy+rzf":       {"label": "RZF, Proposed PA",        "marker": ">", "linestyle": "-.", "linewidth": 1.6, "color": "#8c564b"},
+    "greedy+mrt":       {"label": "MRT, Proposed PA",        "marker": "v", "linestyle": "-",  "linewidth": 1.4, "color": "#9467bd"},
 }
 
 
