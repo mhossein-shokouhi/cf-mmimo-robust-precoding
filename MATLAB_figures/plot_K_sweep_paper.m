@@ -25,7 +25,8 @@ end
 
 xlabel("Number of Users $K$", "Interpreter", "latex");
 ylabel("Aggregate Throughput (bits/s/Hz)");
-legend(plots, local_legend_labels(schemes), "Location", "best", "Interpreter", "latex");
+ylim([20 160])
+legend(plots, local_legend_labels(schemes), "Location", "northwest", "Interpreter", "latex");
 paper_style(gca);
 
 exportgraphics(gcf, out_pdf, "ContentType", "vector", "BackgroundColor", "none");

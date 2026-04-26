@@ -23,7 +23,8 @@ end
 
 xlabel("Number of O-RUs $L$", "Interpreter", "latex");
 ylabel("Aggregate Throughput (bits/s/Hz)");
-legend(plots, local_legend_labels(schemes), "Location", "best", "Interpreter", "latex");
+ylim([0 240])
+legend(plots, local_legend_labels(schemes), "Location", "northwest", "Interpreter", "latex");
 paper_style(gca);
 
 exportgraphics(gcf, out_pdf, "ContentType", "vector", "BackgroundColor", "none");

@@ -21,9 +21,9 @@ for i = 1:numel(schemes)
         "Marker", mk, "MarkerSize", 8, "MarkerFaceColor", "none", "MarkerEdgeColor", c);
 end
 
-xlabel("Number of pilots, $\tau_\mathrm{p}$", "Interpreter", "latex");
+xlabel("Number of Pilots $\tau_\mathrm{p}$", "Interpreter", "latex");
 ylabel("Aggregate Throughput (bits/s/Hz)");
-legend(plots, local_legend_labels(schemes), "Location", "best", "Interpreter", "latex");
+legend(plots, local_legend_labels(schemes), "Location", "northwest", "Interpreter", "latex");
 paper_style(gca);
 set(gcf, "Position", [100 0 900 600]); % match legacy rate_convergence figure size
 
