@@ -23,7 +23,7 @@ for i = 1:numel(schemes)
         "Marker", mk, "MarkerSize", 8, "MarkerFaceColor", "none", "MarkerEdgeColor", c);
 end
 
-xlabel("Number of Users, $K$", "Interpreter", "latex");
+xlabel("Number of Users $K$", "Interpreter", "latex");
 ylabel("Aggregate Throughput (bits/s/Hz)");
 legend(plots, local_legend_labels(schemes), "Location", "best", "Interpreter", "latex");
 paper_style(gca);

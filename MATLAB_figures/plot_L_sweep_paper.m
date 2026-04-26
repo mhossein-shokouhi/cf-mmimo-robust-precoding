@@ -21,7 +21,7 @@ for i = 1:numel(schemes)
         "Marker", mk, "MarkerSize", 8, "MarkerFaceColor", "none", "MarkerEdgeColor", c);
 end
 
-xlabel("Total Number of O-RUs, $L$", "Interpreter", "latex");
+xlabel("Number of O-RUs $L$", "Interpreter", "latex");
 ylabel("Aggregate Throughput (bits/s/Hz)");
 legend(plots, local_legend_labels(schemes), "Location", "best", "Interpreter", "latex");
 paper_style(gca);
