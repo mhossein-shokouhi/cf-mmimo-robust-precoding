@@ -112,6 +112,8 @@ This produces:
 | `figures/fig_K_sweep.pdf`       | Aggregate throughput vs \(K\) |
 | `figures/fig_L_sweep.pdf`       | Aggregate throughput vs \(L\) |
 | `figures/fig_cdf.pdf`           | Per-user spectral-efficiency CDF at \(\tau_\mathrm{p}=4,\,K=24,\,L=25\) |
+| `figures/fig_ablation.pdf`      | 4-cell ablation bar chart at the default operating point |
+| `results/ablation_table.md`     | Markdown ablation table with paired Δ and 95% CIs |
 
 Cached numerical results land in `results/*.npz`; you can re-render figures any
 time without re-running the simulator.

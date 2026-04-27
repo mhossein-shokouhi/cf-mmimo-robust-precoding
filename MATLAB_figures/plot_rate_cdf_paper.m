@@ -26,7 +26,19 @@ for i = 1:numel(schemes)
     plots(i) = plot(x_sorted, y, "Color", c, "LineStyle", ls, "LineWidth", max(lw, 1.8));
 end
 
-xlabel("Per-user spectral efficiency (bits/s/Hz)");
+yl = ylim;
+xl = [0 16];
+
+plot([xl(1) xl(2)], [0.05 0.05], 'k--', 'LineWidth', 1);
+plot([xl(1) xl(2)], [0.95 0.95], 'k--', 'LineWidth', 1);
+
+% Add text labels
+text(0.2*xl(2), 0.05, ' 5th percentile', 'VerticalAlignment', 'bottom', ...
+    'HorizontalAlignment', 'right', 'FontSize', 20, 'FontName', 'Times');
+text(0.95*xl(2), 0.95, ' 95th percentile', 'VerticalAlignment', 'top', ...
+    'HorizontalAlignment', 'right', 'FontSize', 20, 'FontName', 'Times');
+
+xlabel("Per-user Throughput (bits/s/Hz)");
 ylabel("Empirical CDF");
 legend(plots(isgraphics(plots)), local_legend_labels(schemes(isgraphics(plots))), ...
     "Location", "southeast", "Interpreter", "latex");
