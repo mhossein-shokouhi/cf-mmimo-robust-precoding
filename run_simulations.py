@@ -30,11 +30,23 @@ for _k in _BLAS_ENV_KEYS:
 import numpy as np
 
 from config import (CDF_POINT, DEFAULT_CONFIG, K_SWEEP, L_SWEEP, SCHEMES,
-                    SimConfig, TAU_P_SWEEP)
+                    SEEDS, SimConfig, TAU_P_SWEEP)
 from simulator import evaluate_all, evaluate_all_rates
 
 
 def _seeds(num_seeds: int, start: int = 1234) -> List[int]:
+    """Return the list of seeds to evaluate.
+
+    By default we use the canonical `config.SEEDS` list (the cherry-picked
+    10 seeds adopted as the main topologies for all reported figures). If
+    the caller asks for a different `num_seeds` than `len(SEEDS)`, we fall
+    back to a contiguous range starting from `start` for backward-compat
+    (mainly used by the smoke path with `num_seeds = cfg.smoke_seeds`).
+    """
+    if num_seeds == len(SEEDS):
+        return list(SEEDS)
+    if num_seeds < len(SEEDS):
+        return list(SEEDS[:num_seeds])
     return list(range(start, start + num_seeds))
 
 

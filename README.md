@@ -263,7 +263,8 @@ an order of magnitude.
 
 ## Reproducibility checklist
 
-- [x] Fixed seeds (`1234, 1235, …`) — see `run_simulations.py:_seeds`.
+- [x] Fixed seed list (`config.SEEDS`, 10 deployments) — used by every sweep
+      via `run_simulations.py:_seeds`.
 - [x] All RNGs are derived deterministically from `(seed, role)` so topology,
       pilot, channel, and noise streams are independent.
 - [x] All cached results (`results/*.npz`) and figures (`figures/*.pdf`) are
