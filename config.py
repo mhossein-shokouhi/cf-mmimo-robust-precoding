@@ -48,7 +48,7 @@ class SimConfig:
     priority_w_U: float = 1.0
 
     rt_loops_per_seed: int = 40
-    num_seeds: int = 10
+    num_seeds: int = 30
     smoke_seeds: int = 2
     smoke_rt_loops: int = 8
 
@@ -116,11 +116,12 @@ L_SWEEP: Tuple[int, ...] = (16, 25, 36, 49, 64)
 CDF_POINT = {"tau_p": 4, "K": 24, "L": 25}
 
 SCHEMES = (
-    "greedy+robust",        # 1. Proposed Algorithm (robust WMMSE + heuristic PA)
-    "naive+oblivious",      # 2. CF-WMMSE  + naive DRL (Oh et al. simplified)
-    "random+oblivious",     # 3. CF-WMMSE  + Random PA
-    "naive+rzf",            # 4. LP-RZF    + naive DRL
-    "naive+mrt",            # 5. MRT       + naive DRL
+    "greedy+robust",        # 1. Proposed Algorithm (robust WMMSE + proposed PA)
+    "greedy+oblivious",     # 2. CF-WMMSE   + proposed PA
+    "naive+oblivious",      # 3. CF-WMMSE   + naive DRL (Oh et al. simplified)
+    "random+oblivious",     # 4. CF-WMMSE   + random PA
+    "greedy+rzf",           # 5. LP-RZF     + proposed PA
+    "greedy+mrt",           # 6. MRT        + proposed PA
 )
 
 PROPOSED = "greedy+robust"

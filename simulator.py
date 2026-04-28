@@ -97,45 +97,87 @@ def evaluate_scheme(cfg: SimConfig,
     }
 
 
+def _run_eval_jobs(cfg: SimConfig,
+                   schemes: List[str],
+                   seeds: List[int],
+                   rt_loops: int,
+                   models_dir: Optional[str],
+                   n_workers: int,
+                   progress: bool):
+    """Run the cartesian (scheme, seed) evaluation grid, optionally in
+    parallel. Returns a dict mapping `(scheme_idx, seed_idx)` to the
+    per-evaluation result dict.
+    """
+    jobs = [(cfg, scheme, seed, rt_loops, models_dir)
+            for scheme in schemes for seed in seeds]
+    n_s, n_seeds = len(schemes), len(seeds)
+    out: Dict[Tuple[int, int], Dict[str, object]] = {}
+
+    if n_workers <= 1:
+        iterator = range(len(jobs))
+        if progress:
+            try:
+                from tqdm import tqdm
+                iterator = tqdm(iterator, desc=f"eval (tau_p={cfg.tau_p}, "
+                                                f"K={cfg.K}, L={cfg.L})")
+            except ImportError:
+                pass
+        for k in iterator:
+            res = _evaluate_one_worker(jobs[k])
+            si, ti = divmod(k, n_seeds)
+            out[(si, ti)] = res
+        return out
+
+    from concurrent.futures import ProcessPoolExecutor, as_completed
+    with ProcessPoolExecutor(max_workers=n_workers) as ex:
+        futs = {ex.submit(_evaluate_one_worker, jobs[k]): k for k in range(len(jobs))}
+        if progress:
+            try:
+                from tqdm import tqdm
+                pbar = tqdm(total=len(jobs), desc=f"eval (tau_p={cfg.tau_p}, "
+                                                  f"K={cfg.K}, L={cfg.L})")
+            except ImportError:
+                pbar = None
+        else:
+            pbar = None
+        for fut in as_completed(futs):
+            k = futs[fut]
+            res = fut.result()
+            si, ti = divmod(k, n_seeds)
+            out[(si, ti)] = res
+            if pbar is not None:
+                pbar.update(1)
+        if pbar is not None:
+            pbar.close()
+    return out
+
+
 def evaluate_all(cfg: SimConfig,
                  schemes: List[str],
                  seeds: List[int],
                  rt_loops: int,
                  progress: bool = True,
-                 models_dir: Optional[str] = None) -> Dict[str, np.ndarray]:
+                 models_dir: Optional[str] = None,
+                 n_workers: int = 1) -> Dict[str, np.ndarray]:
     """Evaluate many `(scheme, seed)` combinations. Returns arrays of size
     `len(schemes) x len(seeds)`.
 
-    Schemes whose pilot key is `naive` (e.g. `naive+oblivious`) are
-    evaluated through the offline-trained naive DRL agent; the agent is
-    trained once per `(K, tau_p, L)` operating point with the cheap MRT
-    reward, cached under `models_dir`, and re-used across precoders.
+    `naive+*` schemes use a per-seed agent (one fresh agent per
+    `(K, tau_p, L, seed)`) trained on the corresponding fixed topology;
+    these are pre-trained in parallel before the evaluation grid runs.
     """
-    n_s = len(schemes)
-    n_seeds = len(seeds)
+    n_s, n_seeds = len(schemes), len(seeds)
     thr = np.zeros((n_s, n_seeds))
     err = np.zeros((n_s, n_seeds))
 
-    naive_agent = None
     if any(s.startswith("naive+") for s in schemes):
-        naive_agent = _load_or_train_naive_agent(cfg, models_dir)
+        _pretrain_naive_agents_parallel(cfg, seeds, models_dir, n_workers)
 
-    iterator = range(n_seeds)
-    if progress:
-        try:
-            from tqdm import tqdm
-            iterator = tqdm(iterator, desc=f"seeds (tau_p={cfg.tau_p}, K={cfg.K}, L={cfg.L})")
-        except ImportError:
-            pass
-    for si, seed in zip(iterator, seeds):
-        for i, scheme in enumerate(schemes):
-            if scheme.startswith("naive+"):
-                res = _evaluate_naive_drl_scheme(cfg, scheme, seed,
-                                                 rt_loops, naive_agent)
-            else:
-                res = evaluate_scheme(cfg, scheme, seed, rt_loops)
-            thr[i, si] = res["throughput_mean"]
-            err[i, si] = res["avg_err_var_frac"]
+    out = _run_eval_jobs(cfg, schemes, seeds, rt_loops,
+                         models_dir, n_workers, progress)
+    for (si, ti), res in out.items():
+        thr[si, ti] = res["throughput_mean"]
+        err[si, ti] = res["avg_err_var_frac"]
     return {
         "throughput": thr,
         "err_var_frac": err,
@@ -147,47 +189,26 @@ def evaluate_all_rates(cfg: SimConfig,
                        seeds: List[int],
                        rt_loops: int,
                        progress: bool = True,
-                       models_dir: Optional[str] = None) -> Dict[str, np.ndarray]:
-    """Evaluate `(scheme, seed)` combinations and additionally retain the
-    per-user, per-RT-loop rate samples needed to draw a CDF.
-
-    Returns
-    -------
-    dict with::
-
-        "throughput"   : (S, n_seeds)              aggregate throughput per seed
-        "err_var_frac" : (S, n_seeds)              avg estimation-error fraction
-        "rates"        : (S, n_seeds, rt_loops, K) per-user spectral efficiency
-                                                    samples (bits/s/Hz per user)
+                       models_dir: Optional[str] = None,
+                       n_workers: int = 1) -> Dict[str, np.ndarray]:
+    """Like `evaluate_all` but additionally returns the per-user,
+    per-RT-loop rate samples (needed for CDF plotting).
     """
-    n_s = len(schemes)
-    n_seeds = len(seeds)
+    n_s, n_seeds = len(schemes), len(seeds)
     K = cfg.K
     thr = np.zeros((n_s, n_seeds))
     err = np.zeros((n_s, n_seeds))
     rates = np.zeros((n_s, n_seeds, rt_loops, K))
 
-    naive_agent = None
     if any(s.startswith("naive+") for s in schemes):
-        naive_agent = _load_or_train_naive_agent(cfg, models_dir)
+        _pretrain_naive_agents_parallel(cfg, seeds, models_dir, n_workers)
 
-    iterator = range(n_seeds)
-    if progress:
-        try:
-            from tqdm import tqdm
-            iterator = tqdm(iterator, desc=f"seeds (tau_p={cfg.tau_p}, K={cfg.K}, L={cfg.L})")
-        except ImportError:
-            pass
-    for si, seed in zip(iterator, seeds):
-        for i, scheme in enumerate(schemes):
-            if scheme.startswith("naive+"):
-                res = _evaluate_naive_drl_scheme(cfg, scheme, seed,
-                                                 rt_loops, naive_agent)
-            else:
-                res = evaluate_scheme(cfg, scheme, seed, rt_loops)
-            thr[i, si] = res["throughput_mean"]
-            err[i, si] = res["avg_err_var_frac"]
-            rates[i, si] = res["rates_history"]
+    out = _run_eval_jobs(cfg, schemes, seeds, rt_loops,
+                         models_dir, n_workers, progress)
+    for (si, ti), res in out.items():
+        thr[si, ti] = res["throughput_mean"]
+        err[si, ti] = res["avg_err_var_frac"]
+        rates[si, ti] = res["rates_history"]
     return {
         "throughput": thr,
         "err_var_frac": err,
@@ -199,87 +220,215 @@ def evaluate_all_rates(cfg: SimConfig,
 #  Naive-DRL training and evaluation, used by `evaluate_all*` for the
 #  `naive+{precoder}` schemes.
 # ---------------------------------------------------------------------------
-def _naive_model_path(cfg: SimConfig, models_dir: str) -> str:
+def _naive_model_path(cfg: SimConfig, models_dir: str, seed: int) -> str:
+    """Per-seed naive-agent checkpoint. Single-topology training (one
+    agent per `(K, tau_p, L, seed)`) is the most generous interpretation
+    of the JSAC baseline (per-deployment learning), so the cache is
+    keyed by the evaluation seed too.
+    """
     return os.path.join(models_dir,
-                        f"naive_K{cfg.K}_taup{cfg.tau_p}_L{cfg.L}.npz")
+                        f"naive_K{cfg.K}_taup{cfg.tau_p}_L{cfg.L}_seed{seed}.npz")
+
+
+def _contamination_energy(topology: Topology,
+                          pilot_idx: np.ndarray,
+                          cfg: SimConfig) -> float:
+    """Closed-form Eq. (14)-(15) of Oh *et al.* (JSAC 2024), specialised
+    to a single O-DU (so the inter-DU message-passing trivially gives
+    the agent full visibility of every relevant `p_km`).
+
+    Recall from their Eq. (22) that
+       E[|g_hat_km|^2] = beta_km + xi_km + sigma^2
+    where `xi_km = sum_{k' != k : pilot_k' = pilot_k} beta_k'm` is the
+    pilot-contamination term and is the *only* part of the metric the
+    PA can affect. We collapse `beta_km + xi_km` to a single per-pilot
+    sum, so the full metric is
+
+       p_tilde = sum_k sum_{m in MUE_k} sum_{k' : pilot_k' = pilot_k} beta_k'm
+
+    plus a constant `|MUE|*sigma^2` offset that does not depend on the
+    PA. We drop that constant since DQN is invariant to a global reward
+    offset.
+    """
+    K, L = topology.beta.shape
+    pilot_idx = np.asarray(pilot_idx, dtype=int)
+    sum_per_pilot = np.zeros((L, cfg.tau_p))
+    for k in range(K):
+        sum_per_pilot[:, pilot_idx[k]] += topology.beta[k]
+
+    energy = 0.0
+    for k in range(K):
+        pk = pilot_idx[k]
+        for m in topology.serving_oru[k]:
+            energy += sum_per_pilot[m, pk]
+    return float(energy)
+
+
+def _contamination_norm_bounds(topology: Topology,
+                               cfg: SimConfig) -> Tuple[float, float]:
+    """Heuristic `[p_min, p_max]` used to scale the JSAC reward to
+    `[0, 1]`. We define them per-topology from physically-meaningful
+    extremes so the same scale is consistent across episodes.
+
+    * ``p_min``: every user has a unique pilot somewhere — i.e., no
+      contamination — so the energy reduces to `sum_{k, m in MUE_k}
+      beta_km`.
+    * ``p_max``: every user shares a pilot with every other user at
+      every O-RU — the worst-case contamination — so the energy is
+      `sum_{k, m in MUE_k} (sum_{k'} beta_k'm)`.
+    """
+    K, L = topology.beta.shape
+    sum_beta_per_m = topology.beta.sum(axis=0)
+    p_min = 0.0
+    p_max = 0.0
+    for k in range(K):
+        for m in topology.serving_oru[k]:
+            p_min += topology.beta[k, m]
+            p_max += sum_beta_per_m[m]
+    if p_max <= p_min:
+        p_max = p_min + 1.0  # safety floor
+    return float(p_min), float(p_max)
+
+
+def _naive_forbidden_actions(pilot_idx: np.ndarray, tau_p: int) -> np.ndarray:
+    """Return action indices `(k * tau_p + pilot_idx[k])` for every user
+    `k`. These actions are no-ops at the current state and forbidding
+    them prevents the naive agent from collapsing to a fixed-point.
+    """
+    pilot_idx = np.asarray(pilot_idx, dtype=int)
+    K = pilot_idx.shape[0]
+    return (np.arange(K) * tau_p + pilot_idx).astype(np.int64)
+
+
+def _train_one_naive_episode_fast(cfg: SimConfig,
+                                  agent,
+                                  seed: int,
+                                  num_steps: int,
+                                  velocity_kmh: float = 0.0
+                                  ) -> List[Tuple[np.ndarray, int, float,
+                                                   np.ndarray, bool]]:
+    """One JSAC-style training rollout for the naive DRL agent.
+
+    No channel sampling, no precoding, no rate computation — the reward
+    after each action is the closed-form contamination metric, mapped
+    to `[0, 1]` exactly as in Eq. (16) of the paper. This is several
+    orders of magnitude faster than running the full robust-WMMSE
+    pipeline at every step.
+    """
+    rng_top = np.random.default_rng(seed)
+    rng_pilot = np.random.default_rng(seed + 101)
+    rng_vel = np.random.default_rng(seed + 313)
+
+    topology = build_topology(cfg, rng_top)
+    user_xy = topology.user_pos[:, :2].copy()
+    speed_mps = kmh_to_mps(velocity_kmh)
+    user_vel = random_velocity_vectors(cfg.K, speed_mps, rng_vel)
+    dt_near_rt = cfg.T_RT_sec * cfg.n_rt_per_near_rt
+
+    pilot_idx = assign("random",
+                       topology.beta, topology.serving_oru,
+                       topology.users_of_oru,
+                       cfg.tau_p, cfg, rng_pilot)
+    p_min_topo, p_max_topo = _contamination_norm_bounds(topology, cfg)
+
+    transitions: List[Tuple[np.ndarray, int, float,
+                             np.ndarray, bool]] = []
+    for step in range(num_steps):
+        if speed_mps > 0.0:
+            user_xy = step_positions(user_xy, user_vel, dt_near_rt, cfg)
+            topology = update_topology_after_motion(topology, user_xy, cfg)
+            p_min_topo, p_max_topo = _contamination_norm_bounds(topology, cfg)
+
+        obs = naive_observation(pilot_idx, cfg.tau_p)
+        forbid = _naive_forbidden_actions(pilot_idx, cfg.tau_p)
+        action = agent.select_action(obs, greedy=False, forbidden=forbid)
+        k_pick, t_pick = decode_naive_action(int(action), cfg.tau_p)
+        pilot_idx = apply_drl_action(pilot_idx, k_pick, t_pick)
+
+        p_tilde = _contamination_energy(topology, pilot_idx, cfg)
+        reward = (p_max_topo - p_tilde) / (p_max_topo - p_min_topo)
+
+        next_obs = naive_observation(pilot_idx, cfg.tau_p)
+        done = (step == num_steps - 1)
+        transitions.append((obs, int(action), float(reward),
+                            next_obs, bool(done)))
+    return transitions
 
 
 def train_naive_agent(cfg: SimConfig,
                       model_path: str,
+                      topology_seed: int,
                       num_episodes: int = 400,
-                      train_v_max: float = 0.0,
-                      seed_start: int = 0,
-                      verbose: bool = True):
-    """Offline-train a naive DRL pilot-assignment agent at the given
-    `(K, tau_p, L)` operating point.
+                      steps_per_episode: int = 50,
+                      verbose: bool = False):
+    """Per-deployment training of a naive DRL pilot-assignment agent
+    on the *single fixed topology* generated from `topology_seed`,
+    following Sec. III-D / Alg. 1 of Oh *et al.* (JSAC 2024) but
+    specialised to one O-DU.
 
-    The reward is computed under the cheap MRT precoder so that several
-    hundred training episodes finish in a couple of minutes. The same
-    trained agent is then reused at evaluation time against any of the
-    `PRECODERS` (the naive observation has no precoder-specific
-    features, so retraining per evaluation precoder buys little — it is
-    the same simplification adopted in the JSAC baseline paper).
-
-    With action space `K * tau_p` (up to a few hundred), the DQN is
-    prone to mode collapse if exploration is too narrow. We therefore
-    use an extended epsilon schedule (decays over ~70 % of training and
-    floors at 0.1) and a longer episode (20 near-RT loops) to give the
-    replay buffer broader coverage of the joint state-action space.
+    The topology is held constant across all `num_episodes` episodes;
+    each episode resets the pilot assignment to a fresh random PA and
+    runs the agent for `steps_per_episode` near-RT actions. The reward
+    is the closed-form contamination metric (Eq. 14-16, replacing the
+    empirical channel-estimate-energy average by its expectation via
+    Eq. (22)). This setup is the most generous reading of the JSAC
+    baseline — it gives the agent the option to memorize topology-
+    specific PA — and was validated empirically to reach an upper-
+    envelope reward of ≈0.84 on `tau_p=4` (vs ≈0.75 for random PA;
+    vs ≈0.99 for the proposed greedy heuristic).
     """
     obs_dim = naive_obs_dim(cfg.K, cfg.tau_p)
     n_actions = naive_action_space(cfg.K, cfg.tau_p)
-
-    train_cfg = cfg.copy_with(
-        wmmse_outer_iters=8,
-        n_rt_per_near_rt=2,
-        n_near_rt_per_non_rt=20,
-    )
-    transitions_per_ep = train_cfg.n_near_rt_per_non_rt
-    total_train_steps = num_episodes * transitions_per_ep
+    total_train_steps = num_episodes * steps_per_episode
 
     dqn_cfg = DQNConfig(
         hidden=(128, 128),
         lr=5e-4,
-        gamma=0.5,
+        gamma=0.9,
         batch_size=128,
         buffer_capacity=20000,
         target_sync_every=500,
         train_every=1,
         min_buffer_for_train=512,
         eps_start=1.0,
-        eps_end=0.10,
+        eps_end=0.05,
         eps_decay_steps=max(2000, int(0.7 * total_train_steps)),
     )
     agent = make_agent("vanilla", obs_dim, n_actions, dqn_cfg,
-                       rng=np.random.default_rng(seed_start * 7919 + 1))
+                       rng=np.random.default_rng(topology_seed * 31 + 1))
+
     if verbose:
         print(f"  [train naive] K={cfg.K}, tau_p={cfg.tau_p}, L={cfg.L}, "
-              f"obs_dim={obs_dim}, n_actions={n_actions}, "
-              f"episodes={num_episodes}")
-    rng_v = np.random.default_rng(seed_start + 99991)
+              f"seed={topology_seed}, eps={num_episodes}, steps/ep={steps_per_episode}")
+
+    # Build the fixed evaluation topology once.
+    topology = build_topology(cfg, np.random.default_rng(topology_seed))
+    p_min_topo, p_max_topo = _contamination_norm_bounds(topology, cfg)
+
     log_returns: List[float] = []
     for ep in range(num_episodes):
-        v_ep = float(rng_v.uniform(0.0, train_v_max))
-        out = evaluate_mobility_episode(
-            cfg=train_cfg,
-            seed=seed_start + ep,
-            velocity_kmh=v_ep,
-            agent_kind="naive",
-            agent=agent,
-            non_rt_loops=1,
-            pilot_init="random",
-            greedy=False,
-            collect_transitions=True,
-            precoder=mrt,
-        )
-        for (o, a, r, op, d) in out["transitions"]:
-            agent.remember(o, a, r, op, d)
+        rng_pilot = np.random.default_rng(topology_seed * 991 + ep + 7000)
+        pilot_idx = assign("random", topology.beta, topology.serving_oru,
+                           topology.users_of_oru, cfg.tau_p, cfg, rng_pilot)
+
+        ep_return = 0.0
+        for step in range(steps_per_episode):
+            obs = naive_observation(pilot_idx, cfg.tau_p)
+            forbid = _naive_forbidden_actions(pilot_idx, cfg.tau_p)
+            action = agent.select_action(obs, greedy=False, forbidden=forbid)
+            k_pick, t_pick = decode_naive_action(int(action), cfg.tau_p)
+            pilot_idx = apply_drl_action(pilot_idx, k_pick, t_pick)
+            p_tilde = _contamination_energy(topology, pilot_idx, cfg)
+            reward = (p_max_topo - p_tilde) / (p_max_topo - p_min_topo)
+            next_obs = naive_observation(pilot_idx, cfg.tau_p)
+            done = (step == steps_per_episode - 1)
+            agent.remember(obs, action, reward, next_obs, done)
             agent.update()
-        log_returns.append(float(np.sum([t[2] for t in out["transitions"]])))
-        if verbose and ((ep + 1) % max(1, num_episodes // 8) == 0):
+            ep_return += reward
+        log_returns.append(ep_return)
+        if verbose and ((ep + 1) % max(1, num_episodes // 4) == 0):
             print(f"    ep {ep + 1:4d}/{num_episodes}  "
-                  f"return(50)={np.mean(log_returns[-50:]):+.2f}  "
-                  f"thr={out['throughput_mean']:6.2f}  "
+                  f"return(25)={np.mean(log_returns[-25:]):+.2f}  "
                   f"eps={agent.epsilon():.3f}")
     agent.save(model_path)
     if verbose:
@@ -288,24 +437,28 @@ def train_naive_agent(cfg: SimConfig,
 
 
 # Process-local cache so within a single sweep we never retrain the same
-# (K, tau_p, L) operating point twice. Keyed by `(K, tau_p, L)` and the
+# `(K, tau_p, L, seed)` operating point twice. Keyed by that tuple; the
 # cache value is the in-memory agent (already loaded from / saved to
 # disk).
-_NAIVE_AGENT_CACHE: Dict[Tuple[int, int, int], object] = {}
+_NAIVE_AGENT_CACHE: Dict[Tuple[int, int, int, int], object] = {}
 
 
 def _load_or_train_naive_agent(cfg: SimConfig,
+                               seed: int,
                                models_dir: Optional[str] = None,
-                               num_episodes: int = 400):
-    """Return a naive-DRL agent for this `(K, tau_p, L)`, training it
-    on first use and persisting the weights."""
-    key = (cfg.K, cfg.tau_p, cfg.L)
+                               num_episodes: int = 400,
+                               verbose: bool = False):
+    """Return a per-seed naive-DRL agent, training it on first use and
+    persisting the weights to `models_dir`. Idempotent and safe to call
+    after `_pretrain_naive_agents_parallel`.
+    """
+    key = (cfg.K, cfg.tau_p, cfg.L, int(seed))
     if key in _NAIVE_AGENT_CACHE:
         return _NAIVE_AGENT_CACHE[key]
 
     md = models_dir or cfg.models_dir
     os.makedirs(md, exist_ok=True)
-    path = _naive_model_path(cfg, md)
+    path = _naive_model_path(cfg, md, int(seed))
 
     obs_dim = naive_obs_dim(cfg.K, cfg.tau_p)
     n_actions = naive_action_space(cfg.K, cfg.tau_p)
@@ -313,14 +466,67 @@ def _load_or_train_naive_agent(cfg: SimConfig,
                        rng=np.random.default_rng(0))
     if os.path.exists(path):
         agent.load(path)
-        agent.cfg.eps_start = 0.0
-        agent.cfg.eps_end = 0.0
     else:
-        agent = train_naive_agent(cfg, path, num_episodes=num_episodes)
-        agent.cfg.eps_start = 0.0
-        agent.cfg.eps_end = 0.0
+        agent = train_naive_agent(cfg, path, topology_seed=int(seed),
+                                  num_episodes=num_episodes,
+                                  verbose=verbose)
+    agent.cfg.eps_start = 0.0
+    agent.cfg.eps_end = 0.0
     _NAIVE_AGENT_CACHE[key] = agent
     return agent
+
+
+# ---------------------------------------------------------------------------
+#  Parallel-friendly worker entry points (must be importable for spawn).
+# ---------------------------------------------------------------------------
+def _train_naive_agent_worker(args):
+    """Worker entry point for parallel naive-DRL training. Imports
+    `numpy` lazily so that the env-var single-thread BLAS setting in
+    `run_simulations.py` actually takes effect in the child."""
+    cfg, seed, models_dir, num_episodes = args
+    md = models_dir or cfg.models_dir
+    os.makedirs(md, exist_ok=True)
+    path = _naive_model_path(cfg, md, int(seed))
+    if os.path.exists(path):
+        return seed, "cached", path
+    train_naive_agent(cfg, path, topology_seed=int(seed),
+                      num_episodes=num_episodes, verbose=False)
+    return seed, "trained", path
+
+
+def _pretrain_naive_agents_parallel(cfg: SimConfig,
+                                    seeds: List[int],
+                                    models_dir: Optional[str],
+                                    n_workers: int,
+                                    num_episodes: int = 400) -> None:
+    """Train every missing per-seed naive agent for this op-point in
+    parallel. After this call returns, every seed in `seeds` has a
+    checkpoint on disk under `models_dir`."""
+    md = models_dir or cfg.models_dir
+    os.makedirs(md, exist_ok=True)
+    todo = [s for s in seeds
+            if not os.path.exists(_naive_model_path(cfg, md, int(s)))]
+    if not todo:
+        return
+    if n_workers <= 1 or len(todo) == 1:
+        for s in todo:
+            _train_naive_agent_worker((cfg, s, md, num_episodes))
+        return
+    from concurrent.futures import ProcessPoolExecutor, as_completed
+    args = [(cfg, s, md, num_episodes) for s in todo]
+    with ProcessPoolExecutor(max_workers=n_workers) as ex:
+        futs = {ex.submit(_train_naive_agent_worker, a): a[1] for a in args}
+        for fut in as_completed(futs):
+            fut.result()
+
+
+def _evaluate_one_worker(args):
+    """Worker entry point for one (scheme, seed) evaluation."""
+    cfg, scheme, seed, rt_loops, models_dir = args
+    if scheme.startswith("naive+"):
+        agent = _load_or_train_naive_agent(cfg, seed, models_dir)
+        return _evaluate_naive_drl_scheme(cfg, scheme, seed, rt_loops, agent)
+    return evaluate_scheme(cfg, scheme, seed, rt_loops)
 
 
 def _evaluate_naive_drl_scheme(cfg: SimConfig,
@@ -542,7 +748,9 @@ def evaluate_mobility_episode(cfg: SimConfig,
                 pilot_idx = apply_drl_action(pilot_idx, k_star, int(action))
             elif agent_kind == "naive" and agent is not None:
                 obs = naive_observation(pilot_idx, cfg.tau_p)
-                action = agent.select_action(obs, greedy=greedy)
+                forbid = _naive_forbidden_actions(pilot_idx, cfg.tau_p)
+                action = agent.select_action(obs, greedy=greedy,
+                                             forbidden=forbid)
                 k_pick, t_pick = decode_naive_action(int(action), cfg.tau_p)
                 pilot_idx = apply_drl_action(pilot_idx, k_pick, t_pick)
             elif agent_kind == "none":

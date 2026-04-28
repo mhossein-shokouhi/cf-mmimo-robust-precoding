@@ -30,9 +30,11 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from typing import List, Optional, Tuple
+from typing import Iterable, List, Optional, Tuple, Union
 
 import numpy as np
+
+ForbiddenSpec = Union[int, Iterable[int], None]
 
 # Accelerate BLAS on macOS occasionally emits spurious divide/overflow
 # warnings from `matmul` when inputs span a wide dynamic range. The
@@ -269,28 +271,39 @@ class _BaseAgent:
         frac = min(1.0, self.action_step / max(c.eps_decay_steps, 1))
         return c.eps_end + (c.eps_start - c.eps_end) * (1.0 - frac)
 
+    @staticmethod
+    def _forbidden_to_array(forbidden: ForbiddenSpec) -> Optional[np.ndarray]:
+        if forbidden is None:
+            return None
+        if np.isscalar(forbidden):
+            return np.asarray([int(forbidden)], dtype=np.int64)
+        arr = np.asarray(list(forbidden), dtype=np.int64)
+        return arr if arr.size > 0 else None
+
     def select_action(self,
                       obs: np.ndarray,
                       greedy: bool = False,
-                      forbidden: Optional[int] = None) -> int:
+                      forbidden: ForbiddenSpec = None) -> int:
         """Pick an action via eps-greedy.
 
-        `forbidden` (if not None) excludes that action index from both the
-        random and the greedy branches. This is used by the proposed
-        Dueling-DDQN refinement to force the agent to actually change the
-        pilot of `k_star` rather than degenerate to a no-op.
+        `forbidden` (if not None) excludes those action indices from both
+        the random and the greedy branches. Accepts either a single int
+        (proposed Dueling-DDQN refinement: force-changing the pilot of
+        `k_star`) or a sequence of ints (naive DQN: forbid every no-op
+        `(k, t)` whose `t` already equals `pilot_idx[k]`).
         """
         self.action_step += 1
+        forbidden_arr = self._forbidden_to_array(forbidden)
         if (not greedy) and self.rng.random() < self.epsilon():
-            if forbidden is None:
+            if forbidden_arr is None:
                 return int(self.rng.integers(0, self.n_actions))
-            choices = np.setdiff1d(np.arange(self.n_actions), [int(forbidden)])
+            choices = np.setdiff1d(np.arange(self.n_actions), forbidden_arr)
             return int(self.rng.choice(choices))
         heads, _ = self.online.forward(obs[None, :])
         q = self._q_from_heads(heads)[0]
-        if forbidden is not None:
+        if forbidden_arr is not None:
             q = q.copy()
-            q[int(forbidden)] = -np.inf
+            q[forbidden_arr] = -np.inf
         return int(np.argmax(q))
 
     def q_values(self, obs: np.ndarray) -> np.ndarray:
@@ -398,8 +411,16 @@ class DuelingDQNAgent(_BaseAgent):
 
 
 class VanillaDQNAgent(_BaseAgent):
-    """Plain DQN with a single Q head — the baseline."""
+    """Plain DQN with a single Q head — the baseline.
+
+    Masks the just-taken action in the TD target. For the naive agent,
+    after taking action ``a = k * tau_p + t`` the user `k` is on pilot
+    `t` at the next state, so action `a` is a no-op there and forbidding
+    it in bootstrap is the right constraint (the same constraint we
+    enforce at action-selection time via ``forbidden``).
+    """
     is_dueling = False
+    mask_self_action = True
 
     def _build_net(self) -> MLP:
         layers = (self.obs_dim, *self.cfg.hidden)

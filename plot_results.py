@@ -122,10 +122,11 @@ def _plot_ablation(path: str,
 
 
 CDF_MAIN_SCHEMES = ("greedy+robust",
+                    "greedy+oblivious",
                     "naive+oblivious",
                     "random+oblivious",
-                    "naive+rzf",
-                    "naive+mrt")
+                    "greedy+rzf",
+                    "greedy+mrt")
 
 
 def _plot_cdf(path: str,

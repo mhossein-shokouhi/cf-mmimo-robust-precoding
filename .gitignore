@@ -33,3 +33,9 @@ Thumbs.db
 # Local / experimental
 *.tmp
 .scratch/
+
+# Trained DRL agent checkpoints — large (111 MB+) and trivially
+# regenerable from the code on first sweep run; they are cached under
+# `models/naive_K{K}_taup{tau_p}_L{L}_seed{seed}.npz` per operating
+# point. Keep `proposed.npz` in case it is ever shipped explicitly.
+models/naive_*.npz
