@@ -27,10 +27,18 @@ legend(plots, local_legend_labels(schemes), "Location", "northwest", "Interprete
 paper_style(gca);
 set(gcf, "Position", [100 0 900 600]); % match legacy rate_convergence figure size
 
-idx_ours = find(schemes == "greedy+robust", 1);
+idx_ours  = find(schemes == "greedy+robust", 1);
+idx_naive = find(schemes == "naive+oblivious", 1);
 if ~isempty(idx_ours)
     others = mean_thr; others(idx_ours, :) = -inf;
     annotate_max_improvement(gca, tau_p, mean_thr(idx_ours, :), others, "TextFormat", "%.1f%%");
+end
+% Also draw the max % gain of the proposed scheme over the MA-DRL PA
+% baseline (naive+oblivious) at its own peak tau_p, similar to the
+% existing arrow against the closest competitor.
+if ~isempty(idx_ours) && ~isempty(idx_naive)
+    annotate_max_improvement(gca, tau_p, mean_thr(idx_ours, :), ...
+        mean_thr(idx_naive, :), "TextFormat", "%.1f%%");
 end
 
 exportgraphics(gcf, out_pdf, "ContentType", "vector", "BackgroundColor", "none");
@@ -49,7 +57,7 @@ function s = local_label_for_scheme(scheme)
         case "greedy+oblivious"
             s = "CF-WMMSE, Proposed PA";
         case "naive+oblivious"
-            s = "CF-WMMSE, Naive DRL";
+            s = "CF-WMMSE, MA-DRL PA";
         case "random+oblivious"
             s = "CF-WMMSE, Random PA";
         case "greedy+rzf"

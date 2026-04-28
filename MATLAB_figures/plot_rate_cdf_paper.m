@@ -61,7 +61,7 @@ function s = local_label_for_scheme(scheme)
         case "greedy+oblivious"
             s = "CF-WMMSE, Proposed PA";
         case "naive+oblivious"
-            s = "CF-WMMSE, Naive DRL";
+            s = "CF-WMMSE, MA-DRL PA";
         case "random+oblivious"
             s = "CF-WMMSE, Random PA";
         case "greedy+rzf"
