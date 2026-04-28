@@ -60,6 +60,8 @@ function s = local_label_for_scheme(scheme)
             s = "Proposed Algorithm";
         case "greedy+oblivious"
             s = "CF-WMMSE, Proposed PA";
+        case "naive+oblivious"
+            s = "CF-WMMSE, Naive DRL";
         case "random+oblivious"
             s = "CF-WMMSE, Random PA";
         case "greedy+rzf"
@@ -72,11 +74,15 @@ function s = local_label_for_scheme(scheme)
 end
 
 function [c, ls, mk, lw] = local_style_for_scheme(scheme, colors)
+    % `naive+oblivious` is the simplified DRL baseline (Oh et al.); the CDF
+    % plot is marker-less, so we distinguish it via a dashed line.
     switch string(scheme)
         case "greedy+robust"
             c = colors(1, :); ls = "-"; mk = "s"; lw = 1.25;
         case "greedy+oblivious"
             c = colors(2, :); ls = "-"; mk = "+"; lw = 1.25;
+        case "naive+oblivious"
+            c = colors(6, :); ls = "--"; mk = "d"; lw = 1.25;
         case "random+oblivious"
             c = colors(4, :); ls = "-"; mk = "o"; lw = 1.25;
         case "greedy+rzf"

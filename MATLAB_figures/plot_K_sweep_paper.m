@@ -44,6 +44,8 @@ function s = local_label_for_scheme(scheme)
             s = "Proposed Algorithm";
         case "greedy+oblivious"
             s = "CF-WMMSE, Proposed PA";
+        case "naive+oblivious"
+            s = "CF-WMMSE, Naive DRL";
         case "random+oblivious"
             s = "CF-WMMSE, Random PA";
         case "greedy+rzf"
@@ -57,11 +59,16 @@ end
 
 function [c, ls, mk, lw] = local_style_for_scheme(scheme, colors)
     % Keep this close to legacy "lines()" look, with proposed highlighted.
+    % `naive+oblivious` is the simplified DRL baseline (Oh et al.); we draw
+    % it with a dashed line and a diamond marker to distinguish it from the
+    % proposed-PA family which uses solid lines.
     switch string(scheme)
         case "greedy+robust"      % proposed
             c = colors(1, :); ls = "-"; mk = "s"; lw = 1.25;
         case "greedy+oblivious"   % closest competitor
             c = colors(2, :); ls = "-"; mk = "+"; lw = 1.25;
+        case "naive+oblivious"    % naive DRL baseline
+            c = colors(6, :); ls = "--"; mk = "d"; lw = 1.25;
         case "random+oblivious"
             c = colors(4, :); ls = "-"; mk = "o"; lw = 1.25;
         case "greedy+rzf"
