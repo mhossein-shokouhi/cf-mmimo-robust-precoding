@@ -59,16 +59,15 @@ end
 
 function [c, ls, mk, lw] = local_style_for_scheme(scheme, colors)
     % Keep this close to legacy "lines()" look, with proposed highlighted.
-    % `naive+oblivious` is the simplified DRL baseline (Oh et al.); we draw
-    % it with a dashed line and a diamond marker to distinguish it from the
-    % proposed-PA family which uses solid lines.
+    % All baselines use solid lines; the MA-DRL PA baseline is identified
+    % by its diamond marker and distinct colour.
     switch string(scheme)
         case "greedy+robust"      % proposed
             c = colors(1, :); ls = "-"; mk = "s"; lw = 1.25;
         case "greedy+oblivious"   % closest competitor
             c = colors(2, :); ls = "-"; mk = "+"; lw = 1.25;
-        case "naive+oblivious"    % naive DRL baseline
-            c = colors(6, :); ls = "--"; mk = "d"; lw = 1.25;
+        case "naive+oblivious"    % MA-DRL PA baseline
+            c = colors(6, :); ls = "-"; mk = "d"; lw = 1.25;
         case "random+oblivious"
             c = colors(4, :); ls = "-"; mk = "o"; lw = 1.25;
         case "greedy+rzf"

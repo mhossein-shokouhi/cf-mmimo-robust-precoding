@@ -5,10 +5,15 @@ function annotate_max_improvement(ax, x, y_ours, y_others, varargin)
 %   Optional name-value:
 %     "TextFormat" (default "%.1f%%")
 %     "FontSize"   (default 20)
+%     "XOffset"    (default 0.0) Horizontal shift of the arrow & textbox in
+%                  normalized figure units. Useful when the max occurs at
+%                  the edge of the x-axis and the textbox would otherwise
+%                  spill outside the plot area.
 
     p = inputParser;
     p.addParameter("TextFormat", "%.1f%%", @(s) ischar(s) || isstring(s));
     p.addParameter("FontSize", 20, @(v) isnumeric(v) && isscalar(v));
+    p.addParameter("XOffset", 0.0, @(v) isnumeric(v) && isscalar(v));
     p.parse(varargin{:});
 
     if nargin < 1 || isempty(ax)
@@ -43,6 +48,8 @@ function annotate_max_improvement(ax, x, y_ours, y_others, varargin)
     if any(~isfinite([xn, y0n, y1n]))
         return;
     end
+
+    xn = xn + p.Results.XOffset;
 
     ylo = min(y0n, y1n);
     yhi = max(y0n, y1n);
