@@ -45,6 +45,7 @@ def run_tau_p_sweep(cfg: SimConfig,
     t0 = time.time()
     for ti, tau_p in enumerate(tau_ps):
         cfg_tau = cfg.copy_with(tau_p=tau_p)
+        print(f"  [tau_p sweep] tau_p={tau_p}")
         res = evaluate_all(cfg_tau, schemes, seeds, rt_loops)
         thr[:, ti, :] = res["throughput"]
     elapsed = time.time() - t0
@@ -73,6 +74,7 @@ def run_K_sweep(cfg: SimConfig,
     t0 = time.time()
     for ki, K in enumerate(Ks):
         cfg_k = cfg.copy_with(K=K)
+        print(f"  [K sweep] K={K}")
         res = evaluate_all(cfg_k, schemes, seeds, rt_loops)
         thr[:, ki, :] = res["throughput"]
     elapsed = time.time() - t0
@@ -101,6 +103,7 @@ def run_L_sweep(cfg: SimConfig,
     t0 = time.time()
     for li, L in enumerate(Ls):
         cfg_l = cfg.copy_with(L=L, L_max=min(cfg.L_max, L))
+        print(f"  [L sweep] L={L}")
         res = evaluate_all(cfg_l, schemes, seeds, rt_loops)
         thr[:, li, :] = res["throughput"]
     elapsed = time.time() - t0

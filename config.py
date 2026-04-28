@@ -52,8 +52,38 @@ class SimConfig:
     smoke_seeds: int = 2
     smoke_rt_loops: int = 8
 
+    # ---- O-RAN control loop timescales (Section IV of ORAN.tex) ----
+    # T_RT = 1 ms RT loop, N_RT RT loops per near-RT loop, N_nRT near-RT
+    # loops per non-RT loop. The DRL agent triggers once per near-RT loop;
+    # the heuristic re-initialises the PA at the start of each non-RT loop.
+    T_RT_sec: float = 1e-3
+    n_rt_per_near_rt: int = 10
+    n_near_rt_per_non_rt: int = 10
+
+    # Number of top-conflict neighbours included in the proposed agent's
+    # observation (Section III-B, set M_{k*}).
+    drl_neighbour_M: int = 3
+
+    # Default eval velocity grid for the mobility figure (km/h). The
+    # range covers pedestrian (1-5), urban (10-30), and vehicular
+    # (50-100) speeds so the figure shows where the baseline DRL agent
+    # — which only sees the pilot-assignment matrix — starts to fall
+    # apart relative to the proposed (rich-observation) Dueling DDQN.
+    velocity_kmh_eval: tuple = (0.0, 5.0, 15.0, 30.0, 60.0, 100.0)
+
+    # At eval time the heuristic only runs once at the start of the
+    # episode and the DRL refines for `mobility_near_rt_per_non_rt`
+    # near-RT loops. With T_RT_sec=1e-3 and n_rt_per_near_rt=10, this
+    # gives 1 s between heuristic re-inits — long enough that, at
+    # vehicular speeds, the channel statistics shift meaningfully (a
+    # few metres of motion ≈ a non-trivial fraction of the inter-O-RU
+    # spacing) so the DRL agent's near-RT refinement has something to do.
+    mobility_near_rt_per_non_rt: int = 100
+    mobility_non_rt_loops: int = 1
+
     results_dir: str = "results"
     figures_dir: str = "figures"
+    models_dir: str = "models"
 
     @property
     def P_max(self) -> float:
@@ -86,11 +116,11 @@ L_SWEEP: Tuple[int, ...] = (16, 25, 36, 49, 64)
 CDF_POINT = {"tau_p": 4, "K": 24, "L": 25}
 
 SCHEMES = (
-    "greedy+robust",
-    "greedy+oblivious",
-    "random+oblivious",
-    "greedy+rzf",
-    "greedy+mrt",
+    "greedy+robust",        # 1. Proposed Algorithm (robust WMMSE + heuristic PA)
+    "naive+oblivious",      # 2. CF-WMMSE  + naive DRL (Oh et al. simplified)
+    "random+oblivious",     # 3. CF-WMMSE  + Random PA
+    "naive+rzf",            # 4. LP-RZF    + naive DRL
+    "naive+mrt",            # 5. MRT       + naive DRL
 )
 
 PROPOSED = "greedy+robust"

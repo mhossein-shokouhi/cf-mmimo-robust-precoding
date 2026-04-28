@@ -12,11 +12,24 @@ from config import DEFAULT_CONFIG
 
 SCHEME_PLOT_STYLES = {
     "greedy+robust":    {"label": "Proposed Algorithm",      "marker": "o", "linestyle": "-",  "linewidth": 2.0, "color": "#1f77b4"},
+    "naive+oblivious":  {"label": "CF-WMMSE, Naive DRL",     "marker": "s", "linestyle": "--", "linewidth": 1.6, "color": "#ff7f0e"},
+    "random+oblivious": {"label": "CF-WMMSE, Random PA",     "marker": "D", "linestyle": ":",  "linewidth": 1.6, "color": "#d62728"},
+    "naive+rzf":        {"label": "RZF, Naive DRL",          "marker": ">", "linestyle": "-.", "linewidth": 1.6, "color": "#8c564b"},
+    "naive+mrt":        {"label": "MRT, Naive DRL",          "marker": "v", "linestyle": "-",  "linewidth": 1.4, "color": "#9467bd"},
+    # legacy keys kept so older cached `.npz` files still render
     "greedy+oblivious": {"label": "CF-WMMSE, Proposed PA",   "marker": "s", "linestyle": "--", "linewidth": 1.6, "color": "#ff7f0e"},
     "random+robust":    {"label": "Robust WMMSE, Random PA", "marker": "^", "linestyle": "-.", "linewidth": 1.6, "color": "#2ca02c"},
-    "random+oblivious": {"label": "CF-WMMSE, Random PA",     "marker": "D", "linestyle": ":",  "linewidth": 1.6, "color": "#d62728"},
     "greedy+rzf":       {"label": "RZF, Proposed PA",        "marker": ">", "linestyle": "-.", "linewidth": 1.6, "color": "#8c564b"},
     "greedy+mrt":       {"label": "MRT, Proposed PA",        "marker": "v", "linestyle": "-",  "linewidth": 1.4, "color": "#9467bd"},
+}
+
+MOBILITY_PLOT_STYLES = {
+    "proposed_drl": {"label": "Proposed (Heuristic + Dueling DDQN)",
+                     "marker": "o", "linestyle": "-",  "linewidth": 2.0, "color": "#1f77b4"},
+    "heuristic":    {"label": "Heuristic only (Proposed PA)",
+                     "marker": "s", "linestyle": "--", "linewidth": 1.6, "color": "#2ca02c"},
+    "naive_drl":    {"label": "Naive DRL (Oh et al. simplified)",
+                     "marker": "^", "linestyle": "-.", "linewidth": 1.6, "color": "#ff7f0e"},
 }
 
 
@@ -109,10 +122,10 @@ def _plot_ablation(path: str,
 
 
 CDF_MAIN_SCHEMES = ("greedy+robust",
-                    "greedy+oblivious",
+                    "naive+oblivious",
                     "random+oblivious",
-                    "greedy+rzf",
-                    "greedy+mrt")
+                    "naive+rzf",
+                    "naive+mrt")
 
 
 def _plot_cdf(path: str,
@@ -158,6 +171,46 @@ def _plot_cdf(path: str,
     print(f"figure saved -> {figure_path}")
 
 
+def _plot_mobility(path: str, figure_path: str) -> None:
+    """Aggregate throughput vs. user velocity (km/h)."""
+    data = np.load(path, allow_pickle=True)
+    schemes = [str(s) for s in data["schemes"]]
+    velocities = data["velocities"]
+    thr = data["throughput"]                                 # (S, V, seeds)
+    mean = thr.mean(axis=-1)
+    if thr.shape[-1] > 1:
+        sem = thr.std(axis=-1, ddof=1) / np.sqrt(thr.shape[-1])
+    else:
+        sem = np.zeros_like(mean)
+
+    K = int(data["K"]); L = int(data["L"]); tau_p = int(data["tau_p"])
+
+    plt.figure(figsize=(6.5, 4.2))
+    order = ("proposed_drl", "heuristic", "naive_drl")
+    for sch in order:
+        if sch not in schemes:
+            continue
+        i = schemes.index(sch)
+        style = MOBILITY_PLOT_STYLES.get(sch, {"label": sch, "marker": "o",
+                                                "linestyle": "-", "color": None})
+        plt.errorbar(velocities, mean[i], yerr=sem[i],
+                     label=style["label"],
+                     marker=style["marker"],
+                     linestyle=style["linestyle"],
+                     linewidth=style.get("linewidth", 1.5),
+                     color=style.get("color"),
+                     capsize=2.5)
+    plt.xlabel("User velocity (km/h)")
+    plt.ylabel("Aggregate throughput (bits/s/Hz)")
+    plt.title(rf"Mobility sweep ($\tau_\mathrm{{p}}={tau_p}$, $K={K}$, $L={L}$)")
+    plt.grid(True, alpha=0.3)
+    plt.legend(loc="best", fontsize=8)
+    plt.tight_layout()
+    plt.savefig(figure_path)
+    plt.close()
+    print(f"figure saved -> {figure_path}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--results", default=DEFAULT_CONFIG.results_dir)
@@ -169,6 +222,7 @@ def main() -> None:
     K_path = os.path.join(args.results, "K_sweep.npz")
     L_path = os.path.join(args.results, "L_sweep.npz")
     cdf_path = os.path.join(args.results, "cdf_point.npz")
+    mobility_path = os.path.join(args.results, "mobility_sweep.npz")
 
     if os.path.exists(tau_path):
         _plot_sweep(tau_path, "tau_ps", r"Number of pilots $\tau_\mathrm{p}$",
@@ -194,6 +248,12 @@ def main() -> None:
         _plot_cdf(cdf_path, os.path.join(args.out, "fig_cdf.pdf"))
     else:
         print(f"missing {cdf_path}")
+
+    if os.path.exists(mobility_path):
+        _plot_mobility(mobility_path,
+                       os.path.join(args.out, "fig_mobility.pdf"))
+    else:
+        print(f"missing {mobility_path}")
 
 
 if __name__ == "__main__":
