@@ -2,9 +2,9 @@
 
 Gain column: point estimate is $(\bar{A}-\bar{B})/\bar{B}\times 100$ (table-consistent); 95% CI and $t$-statistic are computed from the paired difference $A_i - B_i$.
 
-| Scheme | Precoder | Pilot Assignment | Mean throughput (bits/s/Hz) | Std | Δ vs *CF-WMMSE, Random PA* |
+| Scheme | Precoder | Pilot Assignment | Mean throughput (bits/s/Hz) | Std | Δ vs *CF-WMMSE, MA-DRL PA* |
 | --- | --- | --- | ---: | ---: | --- |
-| Proposed Algorithm | Robust WMMSE | Proposed | 121.376 | 17.515 | +35.69% (CI ±4.67%, t=14.97) |
-| Robust WMMSE, Random PA | Robust WMMSE | Random | 104.477 | 19.365 | +16.80% (CI ±1.50%, t=21.97) |
-| CF-WMMSE, Proposed PA | CF-WMMSE | Proposed | 108.593 | 16.762 | +21.40% (CI ±5.46%, t= 7.68) |
-| CF-WMMSE, Random PA | CF-WMMSE | Random | 89.451 | 18.753 | (baseline) |
+| Proposed Algorithm | Robust WMMSE | Proposed (heuristic) | 121.244 | 18.705 | +31.15% (CI ±3.43%, t=17.82) |
+| Robust WMMSE, MA-DRL PA | Robust WMMSE | MA-DRL | 106.065 | 18.122 | +14.73% (CI ±0.82%, t=35.10) |
+| CF-WMMSE, Proposed PA | CF-WMMSE | Proposed (heuristic) | 108.872 | 18.697 | +17.77% (CI ±3.64%, t= 9.55) |
+| CF-WMMSE, MA-DRL PA | CF-WMMSE | MA-DRL |  92.447 | 18.587 | (baseline) |
