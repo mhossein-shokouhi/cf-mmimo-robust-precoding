@@ -9,11 +9,18 @@ function annotate_max_improvement(ax, x, y_ours, y_others, varargin)
 %                  normalized figure units. Useful when the max occurs at
 %                  the edge of the x-axis and the textbox would otherwise
 %                  spill outside the plot area.
+%     "YTopOffset" (default 0.0) Reduces the arrow's top y (normalized figure
+%                  units). Use to shorten a too-tall arrow without changing
+%                  the data point being highlighted.
+%     "YTextOffset" (default 0.0) Shifts the text box vertically (normalized
+%                  figure units). Positive moves up; negative moves down.
 
     p = inputParser;
     p.addParameter("TextFormat", "%.1f%%", @(s) ischar(s) || isstring(s));
     p.addParameter("FontSize", 20, @(v) isnumeric(v) && isscalar(v));
     p.addParameter("XOffset", 0.0, @(v) isnumeric(v) && isscalar(v));
+    p.addParameter("YTopOffset", 0.0, @(v) isnumeric(v) && isscalar(v) && v >= 0);
+    p.addParameter("YTextOffset", 0.0, @(v) isnumeric(v) && isscalar(v));
     p.parse(varargin{:});
 
     if nargin < 1 || isempty(ax)
@@ -53,15 +60,23 @@ function annotate_max_improvement(ax, x, y_ours, y_others, varargin)
 
     ylo = min(y0n, y1n);
     yhi = max(y0n, y1n);
+    if p.Results.YTopOffset > 0
+        % Keep ordering and avoid collapsing the arrow.
+        min_h = 0.02;
+        yhi = max(yhi - p.Results.YTopOffset, ylo + min_h);
+    end
 
     annotation("doublearrow", [xn xn], [ylo yhi]);
     ymid = 0.5 * (ylo + yhi);
     txt_h = 0.06;
-    txt_y = min(max(ymid - 0.5 * txt_h, 0.02), 0.98 - txt_h);
-    txt_x = min(max(xn + 0.01, 0.02), 0.98 - 0.12);
+    txt_y = min(max(ymid - 0.5 * txt_h + p.Results.YTextOffset, 0.02), 0.98 - txt_h);
+    txt_w = 0.12;
+    % Place label to the LEFT of the arrow.
+    txt_x = min(max(xn - 0.01 - txt_w, 0.02), 0.98 - txt_w);
     annotation("textbox", [txt_x, txt_y, 0.12, txt_h], ...
         "String", sprintf(p.Results.TextFormat, imp_best), ...
         "EdgeColor", "none", ...
+        "HorizontalAlignment", "right", ...
         "FontSize", p.Results.FontSize, ...
         "FontName", "Times");
 end

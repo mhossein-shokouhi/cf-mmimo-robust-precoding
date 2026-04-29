@@ -31,7 +31,9 @@ idx_ours  = find(schemes == "greedy+robust", 1);
 idx_naive = find(schemes == "naive+oblivious", 1);
 if ~isempty(idx_ours)
     others = mean_thr; others(idx_ours, :) = -inf;
-    annotate_max_improvement(gca, tau_p, mean_thr(idx_ours, :), others, "TextFormat", "%.1f%%");
+    annotate_max_improvement(gca, tau_p, mean_thr(idx_ours, :), others, ...
+        "TextFormat", "%.1f%%", ...
+        "YTextOffset", -0.01);
 end
 % Also draw the max % gain of the proposed scheme over the MA-DRL PA
 % baseline (naive+oblivious) at its own peak tau_p, similar to the
@@ -42,7 +44,9 @@ end
 if ~isempty(idx_ours) && ~isempty(idx_naive)
     annotate_max_improvement(gca, tau_p, mean_thr(idx_ours, :), ...
         mean_thr(idx_naive, :), "TextFormat", "%.1f%%", ...
-        "XOffset", -0.08);
+        "XOffset", -0.08, ...
+        "YTopOffset", 0.01, ...
+        "YTextOffset", -0.04);
 end
 
 exportgraphics(gcf, out_pdf, "ContentType", "vector", "BackgroundColor", "none");

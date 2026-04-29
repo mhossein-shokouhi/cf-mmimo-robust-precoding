@@ -1,8 +1,0 @@
-1. For the number of available orthogonal pilots, use \tau_p \in \{4, 8, 16\}.
-2. Note that the proposed precoding algorithm is an ITERATIVE algorithm. U, W, and V need to be iteratively updated, and also V might need to be iteratively updated between different O-RUs in an inner loop.
-3. For now, skip the DRL algorithm section and use a heuristic of your choice for pilot assignment.
-4. For the value of the parameters that you need for simulations but have not been set in the manuscript, use the values of your choice that you think are standard and yield good gains.
-5. The choice of baselines is up to you. One good baseline might be oblivious WMMSE, where the (R) terms are missing from the update equations of U, W, and V.
-6. For now we only wish to evaluate the aggregate throughput. Other metrics and simulations will follow later.
-7. You are free to use whatever method you want to calculate the coefficients \lambda_l. If you are not sure how to calculate it, take a look at my TWC paper TWC_Paper.pdf. It is mathematically explained there how you can calculate those coefficients, although that paper assumes perfect CSI and the WMMSE updates lack R terms, so be careful. You do not need to use machine learning methods to determine these coefficients.
-8. It is up to you how many seeds and what simulation duration (number of steps) to consider.

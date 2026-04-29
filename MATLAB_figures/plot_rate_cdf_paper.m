@@ -40,6 +40,7 @@ text(0.95*xl(2), 0.95, ' 95th percentile', 'VerticalAlignment', 'top', ...
 
 xlabel("Per-user Throughput (bits/s/Hz)");
 ylabel("Empirical CDF");
+xlim([0,16])
 legend(plots(isgraphics(plots)), local_legend_labels(schemes(isgraphics(plots))), ...
     "Location", "southeast", "Interpreter", "latex");
 paper_style(gca);
