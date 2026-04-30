@@ -24,5 +24,27 @@ def compute_rates(h_true: np.ndarray,
     return (tau_d / tau_c) * np.log2(1.0 + sinr)
 
 
+def compute_lower_bound_rates(h_hat: np.ndarray,
+                              err_var: np.ndarray,
+                              v: np.ndarray,
+                              sigma2_dl: float,
+                              tau_d: int,
+                              tau_c: int) -> np.ndarray:
+    """Return the robust conditional lower-bound rates used by WMMSE.
+
+    This is Lemma 1's ``hat R_k``: signal and coherent interference are
+    evaluated with the channel estimates, while the estimation-error
+    covariance contributes ``sum_l err_var[k,l] * sum_i ||v[i,l]||^2``.
+    """
+    hat_xi = np.einsum("kln,iln->ki", h_hat.conj(), v)
+    sig = np.abs(np.diag(hat_xi)) ** 2
+    total = np.sum(np.abs(hat_xi) ** 2, axis=1)
+    interf = np.clip(total - sig, 0.0, None)
+    oru_power = np.sum(np.abs(v) ** 2, axis=(0, 2))
+    err_power = err_var @ oru_power
+    sinr = sig / (interf + err_power + sigma2_dl)
+    return (tau_d / tau_c) * np.log2(1.0 + sinr)
+
+
 def aggregate_throughput(rates: np.ndarray) -> float:
     return float(np.sum(rates))

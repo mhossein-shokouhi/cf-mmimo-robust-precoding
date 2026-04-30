@@ -5,6 +5,7 @@ Produces the three experiments needed for the GLOBECOM paper:
 * `tau_p_sweep`  — aggregate throughput vs. pilot-codebook size.
 * `K_sweep`      — aggregate throughput vs. number of users.
 * `L_sweep`      — aggregate throughput vs. number of O-RUs.
+* `min_rate_cdf` — proposed-only per-user CDF vs. minimum-rate target.
 
 For each configuration and each scheme, multiple seeds are averaged.
 Results are saved as `.npz` archives under `results/`.
@@ -29,9 +30,10 @@ for _k in _BLAS_ENV_KEYS:
 
 import numpy as np
 
-from config import (CDF_POINT, DEFAULT_CONFIG, K_SWEEP, L_SWEEP, SCHEMES,
-                    SEEDS, SimConfig, TAU_P_SWEEP)
-from simulator import evaluate_all, evaluate_all_rates
+from config import (CDF_POINT, DEFAULT_CONFIG, K_SWEEP, L_SWEEP,
+                    MIN_RATE_CDF_POINT, SCHEMES, SEEDS, SimConfig,
+                    TAU_P_SWEEP)
+from simulator import evaluate_all, evaluate_all_rates, evaluate_min_rate_cdf
 
 
 def _seeds(num_seeds: int, start: int = 1234) -> List[int]:
@@ -181,6 +183,45 @@ def run_cdf_point(cfg: SimConfig,
     return path
 
 
+def run_min_rate_cdf_point(cfg: SimConfig,
+                           num_seeds: int,
+                           rt_loops: int,
+                           out_dir: str,
+                           tau_p: int,
+                           K: int,
+                           L: int,
+                           n_workers: int = 1) -> str:
+    """Proposed-only CDF over several common minimum-rate targets."""
+    _ensure(out_dir)
+    seeds = _seeds(num_seeds)
+    cfg_pt = cfg.copy_with(tau_p=tau_p, K=K, L=L, L_max=min(cfg.L_max, L))
+    min_rates = list(cfg_pt.min_rate_values)
+    t0 = time.time()
+    res = evaluate_min_rate_cdf(cfg_pt, min_rates, seeds, rt_loops,
+                                n_workers=n_workers)
+    elapsed = time.time() - t0
+    path = os.path.join(out_dir, "min_rate_cdf.npz")
+    np.savez(path,
+             scheme=np.array("greedy+robust"),
+             min_rates=np.array(min_rates, dtype=float),
+             seeds=np.array(seeds),
+             throughput=res["throughput"],
+             rates=res["rates"],
+             lower_bound_rates=res["lower_bound_rates"],
+             final_mu=res["final_mu"],
+             mu_history=res["mu_history"],
+             elapsed_sec=elapsed,
+             tau_p=cfg_pt.tau_p, K=cfg_pt.K, L=cfg_pt.L,
+             N_t=cfg_pt.N_t, L_max=cfg_pt.L_max,
+             rt_loops=rt_loops,
+             warmup_rt_loops=cfg_pt.min_rate_warmup_rt_loops,
+             dual_metric=np.array(cfg_pt.min_rate_dual_metric),
+             dual_step=cfg_pt.min_rate_dual_step,
+             dual_ema_alpha=cfg_pt.min_rate_dual_ema_alpha)
+    print(f"[min-rate CDF] saved -> {path} (elapsed: {elapsed:.1f} s)", flush=True)
+    return path
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--smoke", action="store_true",
@@ -190,8 +231,12 @@ def main() -> None:
     parser.add_argument("--no-K", action="store_true")
     parser.add_argument("--no-L", action="store_true")
     parser.add_argument("--no-cdf", action="store_true")
+    parser.add_argument("--no-min-rate-cdf", action="store_true",
+                        help="skip proposed-only CDF over minimum-rate targets")
     parser.add_argument("--only-cdf", action="store_true",
                         help="run only the CDF point and skip the sweeps")
+    parser.add_argument("--only-min-rate-cdf", action="store_true",
+                        help="run only the proposed-only min-rate CDF")
     parser.add_argument("--workers", type=int, default=1,
                         help="parallel worker processes for the (scheme, seed) "
                              "evaluation grid and for naive-DRL pre-training. "
@@ -202,6 +247,8 @@ def main() -> None:
 
     cfg = DEFAULT_CONFIG
     if args.smoke:
+        cfg = cfg.copy_with(min_rate_warmup_rt_loops=min(cfg.min_rate_warmup_rt_loops,
+                                                         cfg.smoke_rt_loops))
         num_seeds = cfg.smoke_seeds
         rt_loops = cfg.smoke_rt_loops
     else:
@@ -213,6 +260,11 @@ def main() -> None:
     _ensure(args.out)
     print(f"[run] {num_seeds} seeds, rt_loops={rt_loops}, workers={nw}, "
           f"schemes={schemes}", flush=True)
+
+    if args.only_min_rate_cdf:
+        run_min_rate_cdf_point(cfg, num_seeds, rt_loops, args.out,
+                               n_workers=nw, **MIN_RATE_CDF_POINT)
+        return
 
     if args.only_cdf:
         run_cdf_point(cfg, num_seeds, rt_loops, schemes, args.out,
@@ -228,6 +280,9 @@ def main() -> None:
     if not args.no_cdf:
         run_cdf_point(cfg, num_seeds, rt_loops, schemes, args.out,
                       n_workers=nw, **CDF_POINT)
+    if not args.no_min_rate_cdf:
+        run_min_rate_cdf_point(cfg, num_seeds, rt_loops, args.out,
+                               n_workers=nw, **MIN_RATE_CDF_POINT)
 
 
 if __name__ == "__main__":

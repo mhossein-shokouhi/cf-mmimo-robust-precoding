@@ -43,6 +43,15 @@ class SimConfig:
     lambda_max: float = 1e12
     lambda_bisect_iters: int = 60
 
+    # Proposed-only minimum-rate CDF experiment. The default operating point
+    # remains R_min = 0; these values are only used by the extra fairness CDF.
+    min_rate_values: tuple = (0.0, 1.0, 2.0, 4.0, 6.0)
+    min_rate_dual_metric: str = "true"  # "true" or "lower_bound"
+    min_rate_dual_step: float = 1.0
+    min_rate_dual_ema_alpha: float = 0.35
+    min_rate_dual_max: float = 80.0
+    min_rate_warmup_rt_loops: int = 40
+
     pilot_sweep_iters: int = 20
     priority_w_C: float = 1.0
     priority_w_U: float = 1.0
@@ -114,6 +123,7 @@ K_SWEEP: Tuple[int, ...] = (8, 12, 16, 20, 24, 28)
 L_SWEEP: Tuple[int, ...] = (16, 25, 36, 49, 64)
 
 CDF_POINT = {"tau_p": 4, "K": 24, "L": 25}
+MIN_RATE_CDF_POINT = {"tau_p": 8, "K": 24, "L": 64}
 
 # Canonical seed list used by the standard sweeps (tau_p / K / L / CDF).
 # These are the 10 seeds (cherry-picked from an earlier 30-seed sweep)

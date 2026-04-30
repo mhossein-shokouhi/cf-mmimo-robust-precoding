@@ -12,7 +12,7 @@ the precoder/channel evaluation runs every RT loop.
 from __future__ import annotations
 
 import os
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
@@ -20,7 +20,7 @@ from channel import (Topology, build_topology, estimate_channels,
                      estimation_stats, sample_channel)
 from config import SimConfig
 from drl import DQNConfig, make_agent
-from metrics import aggregate_throughput, compute_rates
+from metrics import aggregate_throughput, compute_lower_bound_rates, compute_rates
 from mobility import (kmh_to_mps, random_velocity_vectors, step_positions,
                       update_topology_after_motion)
 from pilot_assignment import (apply_drl_action, assign, decode_naive_action,
@@ -94,6 +94,206 @@ def evaluate_scheme(cfg: SimConfig,
                                                          1e-12, 1.0)))),
         "avg_err_var_frac": float((err_var.sum() / max(topology.beta.sum(), 1e-30))),
         "rates_history": rates_history,
+    }
+
+
+def _min_rate_vector(min_rate: Union[float, np.ndarray], K: int) -> np.ndarray:
+    """Return a length-K minimum-rate vector.
+
+    The paper experiment uses a common target for every user, but accepting a
+    vector keeps the dual update usable for future heterogeneous QoS tests.
+    """
+    r_min = np.asarray(min_rate, dtype=float)
+    if r_min.ndim == 0:
+        return np.full(K, float(r_min))
+    if r_min.shape != (K,):
+        raise ValueError(f"min_rate must be scalar or shape ({K},), got {r_min.shape}")
+    return r_min.copy()
+
+
+def _update_min_rate_duals(mu: np.ndarray,
+                           rate_ema: Optional[np.ndarray],
+                           r_min: np.ndarray,
+                           rate_sample: np.ndarray,
+                           cfg: SimConfig) -> Tuple[np.ndarray, np.ndarray]:
+    """Projected stochastic dual update for the ergodic min-rate constraints."""
+    alpha = float(np.clip(cfg.min_rate_dual_ema_alpha, 0.0, 1.0))
+    if rate_ema is None:
+        new_ema = np.asarray(rate_sample, dtype=float).copy()
+    else:
+        new_ema = (1.0 - alpha) * rate_ema + alpha * rate_sample
+
+    step = float(cfg.min_rate_dual_step)
+    active = r_min > 0.0
+    mu_next = mu.copy()
+    mu_next[active] = np.clip(mu_next[active] + step * (r_min[active] - new_ema[active]),
+                              0.0, float(cfg.min_rate_dual_max))
+    return mu_next, new_ema
+
+
+def evaluate_proposed_min_rate(cfg: SimConfig,
+                               seed: int,
+                               rt_loops: int,
+                               min_rate: Union[float, np.ndarray]) -> Dict[str, object]:
+    """Evaluate proposed PA + robust WMMSE with min-rate dual weights.
+
+    Main simulations keep ``min_rate = 0`` and therefore ``mu = 0``. This
+    entry point is used only by the proposed-only fairness CDF. For
+    ``min_rate > 0``, a short independent warm-up estimates the dual weights
+    before collecting the canonical per-user rate samples.
+    """
+    rng_topology = np.random.default_rng(seed)
+    topology: Topology = build_topology(cfg, rng_topology)
+
+    rng_pilot = np.random.default_rng(seed + 101)
+    pilot_idx = assign("greedy",
+                       topology.beta,
+                       topology.serving_oru,
+                       topology.users_of_oru,
+                       cfg.tau_p,
+                       cfg,
+                       rng_pilot)
+
+    alpha, err_var, lmmse_coef = estimation_stats(topology.beta,
+                                                  pilot_idx,
+                                                  cfg.p_ul,
+                                                  cfg.sigma2)
+    del alpha
+
+    r_min = _min_rate_vector(min_rate, cfg.K)
+    mu = np.zeros(cfg.K)
+    rate_ema: Optional[np.ndarray] = None
+    metric = str(cfg.min_rate_dual_metric).lower()
+    if metric not in {"true", "lower_bound"}:
+        raise ValueError("cfg.min_rate_dual_metric must be 'true' or 'lower_bound'")
+
+    def one_rt_loop(rng_channel: np.random.Generator,
+                    rng_noise: np.random.Generator,
+                    update_dual: bool = True) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        nonlocal mu, rate_ema
+        h_true = sample_channel(topology, cfg.N_t, rng_channel)
+        h_hat = estimate_channels(h_true,
+                                  pilot_idx,
+                                  topology.beta,
+                                  cfg.p_ul,
+                                  cfg.sigma2,
+                                  lmmse_coef,
+                                  rng_noise)
+        v = robust_wmmse(h_hat, err_var, topology.users_of_oru, cfg, eta=1.0 + mu)
+        lb_rates = compute_lower_bound_rates(h_hat, err_var, v,
+                                             cfg.sigma2, cfg.tau_d, cfg.tau_c)
+        rates = compute_rates(h_true, v, cfg.sigma2, cfg.tau_d, cfg.tau_c)
+        if update_dual and np.any(r_min > 0.0):
+            dual_sample = rates if metric == "true" else lb_rates
+            mu, rate_ema = _update_min_rate_duals(mu, rate_ema, r_min,
+                                                  dual_sample, cfg)
+        return rates, lb_rates, mu.copy()
+
+    warmup_loops = int(cfg.min_rate_warmup_rt_loops) if np.any(r_min > 0.0) else 0
+    if warmup_loops > 0:
+        rng_channel_warm = np.random.default_rng(seed + 15001)
+        rng_noise_warm = np.random.default_rng(seed + 19001)
+        for _ in range(warmup_loops):
+            one_rt_loop(rng_channel_warm, rng_noise_warm, update_dual=True)
+
+    # Keep the reported samples on the same canonical channel/noise streams as
+    # the zero-min-rate CDF; warm-up uses independent streams above.
+    rng_channel = np.random.default_rng(seed + 5001)
+    rng_noise = np.random.default_rng(seed + 9001)
+    rates_history = np.zeros((rt_loops, cfg.K))
+    lb_history = np.zeros((rt_loops, cfg.K))
+    mu_history = np.zeros((rt_loops + 1, cfg.K))
+    mu_history[0] = mu
+    for t in range(rt_loops):
+        rates, lb_rates, mu_t = one_rt_loop(rng_channel, rng_noise, update_dual=True)
+        rates_history[t] = rates
+        lb_history[t] = lb_rates
+        mu_history[t + 1] = mu_t
+
+    per_loop = rates_history.sum(axis=1)
+    return {
+        "throughput_mean": float(per_loop.mean()),
+        "throughput_std": float(per_loop.std(ddof=1) if per_loop.size > 1 else 0.0),
+        "rates_history": rates_history,
+        "lower_bound_rates_history": lb_history,
+        "mu_history": mu_history,
+        "final_mu": mu.copy(),
+        "min_rate": r_min,
+    }
+
+
+def _evaluate_min_rate_worker(args):
+    """Worker entry point for one (min_rate, seed) proposed-CDF evaluation."""
+    cfg, min_rate, seed, rt_loops = args
+    return evaluate_proposed_min_rate(cfg, int(seed), int(rt_loops), float(min_rate))
+
+
+def evaluate_min_rate_cdf(cfg: SimConfig,
+                          min_rates: List[float],
+                          seeds: List[int],
+                          rt_loops: int,
+                          progress: bool = True,
+                          n_workers: int = 1) -> Dict[str, np.ndarray]:
+    """Evaluate proposed-only per-user CDF samples for several R_min values."""
+    min_rates = [float(x) for x in min_rates]
+    n_m, n_seeds, K = len(min_rates), len(seeds), cfg.K
+    thr = np.zeros((n_m, n_seeds))
+    rates = np.zeros((n_m, n_seeds, rt_loops, K))
+    lb_rates = np.zeros((n_m, n_seeds, rt_loops, K))
+    final_mu = np.zeros((n_m, n_seeds, K))
+    mu_history = np.zeros((n_m, n_seeds, rt_loops + 1, K))
+
+    jobs = [(cfg, r_min, seed, rt_loops) for r_min in min_rates for seed in seeds]
+    out: Dict[Tuple[int, int], Dict[str, object]] = {}
+
+    if n_workers <= 1:
+        iterator = range(len(jobs))
+        if progress:
+            try:
+                from tqdm import tqdm
+                iterator = tqdm(iterator, desc="min-rate CDF")
+            except ImportError:
+                pass
+        for j in iterator:
+            res = _evaluate_min_rate_worker(jobs[j])
+            ri, si = divmod(j, n_seeds)
+            out[(ri, si)] = res
+    else:
+        from concurrent.futures import ProcessPoolExecutor, as_completed
+        with ProcessPoolExecutor(max_workers=n_workers) as ex:
+            futs = {ex.submit(_evaluate_min_rate_worker, jobs[j]): j
+                    for j in range(len(jobs))}
+            if progress:
+                try:
+                    from tqdm import tqdm
+                    pbar = tqdm(total=len(jobs), desc="min-rate CDF")
+                except ImportError:
+                    pbar = None
+            else:
+                pbar = None
+            for fut in as_completed(futs):
+                j = futs[fut]
+                res = fut.result()
+                ri, si = divmod(j, n_seeds)
+                out[(ri, si)] = res
+                if pbar is not None:
+                    pbar.update(1)
+            if pbar is not None:
+                pbar.close()
+
+    for (ri, si), res in out.items():
+        thr[ri, si] = res["throughput_mean"]
+        rates[ri, si] = res["rates_history"]
+        lb_rates[ri, si] = res["lower_bound_rates_history"]
+        final_mu[ri, si] = res["final_mu"]
+        mu_history[ri, si] = res["mu_history"]
+
+    return {
+        "throughput": thr,
+        "rates": rates,
+        "lower_bound_rates": lb_rates,
+        "final_mu": final_mu,
+        "mu_history": mu_history,
     }
 
 

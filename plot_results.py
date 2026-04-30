@@ -172,6 +172,49 @@ def _plot_cdf(path: str,
     print(f"figure saved -> {figure_path}")
 
 
+def _plot_min_rate_cdf(path: str, figure_path: str) -> None:
+    """Proposed-only per-user CDF for different common minimum-rate targets."""
+    data = np.load(path, allow_pickle=True)
+    min_rates = data["min_rates"].astype(float)
+    rates = data["rates"]  # (R, n_seeds, rt_loops, K)
+    tau_p = int(data["tau_p"]); K = int(data["K"]); L = int(data["L"])
+
+    cmap = plt.get_cmap("viridis")
+    colors = [cmap(x) for x in np.linspace(0.08, 0.90, len(min_rates))]
+
+    plt.figure(figsize=(6.5, 4.2))
+    for i, r_min in enumerate(min_rates):
+        # The minimum-rate constraints are ergodic, so the fairness CDF is
+        # over each user's Monte-Carlo average throughput for each seed.
+        samples = rates[i].mean(axis=1).ravel()
+        samples = samples[np.isfinite(samples)]
+        if samples.size == 0:
+            continue
+        x_sorted = np.sort(samples)
+        y = (np.arange(1, x_sorted.size + 1)) / x_sorted.size
+        p05, p50, p95 = np.percentile(samples, [5, 50, 95])
+        label = (rf"$R^\min={r_min:g}$ "
+                 f"(5%/50%/95%: {p05:.2f}/{p50:.2f}/{p95:.2f})")
+        plt.plot(x_sorted, y,
+                 label=label,
+                 linewidth=2.0 if r_min == 0.0 else 1.8,
+                 linestyle="-" if r_min == 0.0 else "--",
+                 color=colors[i])
+
+    plt.axhline(0.05, color="grey", linewidth=0.8, linestyle=":", alpha=0.6)
+    plt.axhline(0.50, color="grey", linewidth=0.8, linestyle=":", alpha=0.6)
+    plt.axhline(0.95, color="grey", linewidth=0.8, linestyle=":", alpha=0.6)
+    plt.xlabel("Per-user average spectral efficiency (bits/s/Hz)")
+    plt.ylabel("Empirical CDF")
+    plt.title(rf"Proposed min-rate CDF ($\tau_\mathrm{{p}}={tau_p}$, $K={K}$, $L={L}$)")
+    plt.grid(True, alpha=0.3)
+    plt.legend(loc="lower right", fontsize=8)
+    plt.tight_layout()
+    plt.savefig(figure_path)
+    plt.close()
+    print(f"figure saved -> {figure_path}")
+
+
 def _plot_mobility(path: str, figure_path: str) -> None:
     """Aggregate throughput vs. user velocity (km/h)."""
     data = np.load(path, allow_pickle=True)
@@ -223,6 +266,7 @@ def main() -> None:
     K_path = os.path.join(args.results, "K_sweep.npz")
     L_path = os.path.join(args.results, "L_sweep.npz")
     cdf_path = os.path.join(args.results, "cdf_point.npz")
+    min_rate_cdf_path = os.path.join(args.results, "min_rate_cdf.npz")
     mobility_path = os.path.join(args.results, "mobility_sweep.npz")
 
     if os.path.exists(tau_path):
@@ -249,6 +293,12 @@ def main() -> None:
         _plot_cdf(cdf_path, os.path.join(args.out, "fig_cdf.pdf"))
     else:
         print(f"missing {cdf_path}")
+
+    if os.path.exists(min_rate_cdf_path):
+        _plot_min_rate_cdf(min_rate_cdf_path,
+                           os.path.join(args.out, "fig_min_rate_cdf.pdf"))
+    else:
+        print(f"missing {min_rate_cdf_path}")
 
     if os.path.exists(mobility_path):
         _plot_mobility(mobility_path,
