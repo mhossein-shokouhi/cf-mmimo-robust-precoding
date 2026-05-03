@@ -19,7 +19,7 @@ def dbm_to_watt(x_dbm: float) -> float:
 @dataclass
 class SimConfig:
     K: int = 24
-    L: int = 25
+    L: int = 49
     N_t: int = 4
     L_max: int = 8
 
@@ -35,7 +35,7 @@ class SimConfig:
     sigma2_dbm: float = -114.0
 
     tau_c: int = 200
-    tau_p: int = 4
+    tau_p: int = 8
 
     wmmse_outer_iters: int = 25
     wmmse_tol: float = 1e-4
@@ -122,7 +122,7 @@ TAU_P_SWEEP: Tuple[int, ...] = (4, 8, 12, 16, 20, 24)
 K_SWEEP: Tuple[int, ...] = (8, 12, 16, 20, 24, 28)
 L_SWEEP: Tuple[int, ...] = (16, 25, 36, 49, 64)
 
-CDF_POINT = {"tau_p": 4, "K": 24, "L": 25}
+CDF_POINT = {"tau_p": 8, "K": 24, "L": 49}
 MIN_RATE_CDF_POINT = {"tau_p": 8, "K": 24, "L": 64}
 
 # Canonical seed list used by the standard sweeps (tau_p / K / L / CDF).
